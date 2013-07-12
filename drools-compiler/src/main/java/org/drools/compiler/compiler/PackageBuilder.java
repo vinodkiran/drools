@@ -130,12 +130,14 @@ import org.drools.core.util.HierarchySorter;
 import org.drools.core.util.StringUtils;
 import org.drools.core.util.asm.ClassFieldInspector;
 import org.drools.core.xml.XmlChangeSetReader;
+import org.kie.api.definition.type.Key;
 import org.kie.api.definition.type.Role;
 import org.kie.internal.ChangeSet;
 import org.kie.internal.builder.DecisionTableConfiguration;
 import org.kie.internal.builder.KnowledgeBuilderResult;
 import org.kie.internal.builder.KnowledgeBuilderResults;
 import org.kie.internal.builder.ResultSeverity;
+import org.kie.internal.builder.ScoreCardConfiguration;
 import org.kie.internal.builder.conf.PropertySpecificOption;
 import org.kie.internal.definition.KnowledgePackage;
 import org.kie.api.definition.process.Process;
@@ -478,6 +480,30 @@ public class PackageBuilder
         return parser.hasErrors() ? null : pkg;
     }
 
+    public void addPackageFromScoreCard(Resource resource,
+                                        ResourceConfiguration configuration) throws DroolsParserException,
+            IOException {
+        this.resource = resource;
+        addPackage( scoreCardToPackageDescr( resource, configuration ) );
+        this.resource = null;
+    }
+
+    PackageDescr scoreCardToPackageDescr(Resource resource,
+                                         ResourceConfiguration configuration) throws DroolsParserException,
+            IOException {
+        ScoreCardConfiguration scardConfiguration = (ScoreCardConfiguration) configuration;
+        String string = ScoreCardFactory.loadFromInputStream( resource.getInputStream(), scardConfiguration );
+
+        DrlParser parser = new DrlParser( this.configuration.getLanguageLevel() );
+        PackageDescr pkg = parser.parse( resource, new StringReader( string ) );
+        this.results.addAll( parser.getErrors() );
+        if ( pkg == null ) {
+            this.results.add( new ParserError( resource, "Parser returned a null Package", 0, 0 ) );
+        }
+        return parser.hasErrors() ? null : pkg;
+    }
+
+
     public void addPackageFromDrl(Resource resource) throws DroolsParserException,
                                                     IOException {
         this.resource = resource;
@@ -686,9 +712,15 @@ public class PackageBuilder
             ((InternalResource) resource).setResourceType( type );
             if ( ResourceType.DRL.equals( type ) ) {
                 addPackageFromDrl( resource );
+            } else if ( ResourceType.GDRL.equals( type ) ) {
+                addPackageFromDrl( resource );
+            } else if ( ResourceType.RDRL.equals( type ) ) {
+                addPackageFromDrl( resource );
             } else if ( ResourceType.DESCR.equals( type ) ) {
                 addPackageFromDrl( resource );
             } else if ( ResourceType.DSLR.equals( type ) ) {
+                addPackageFromDslr( resource );
+            } else if ( ResourceType.RDSLR.equals( type ) ) {
                 addPackageFromDslr( resource );
             } else if ( ResourceType.DSL.equals( type ) ) {
                 addDsl( resource );
@@ -709,6 +741,8 @@ public class PackageBuilder
                 addPackageFromXSD( resource, (JaxbConfigurationImpl) configuration );
             } else if ( ResourceType.PMML.equals( type ) ) {
                 addPackageFromPMML( resource, type, configuration );
+            } else if ( ResourceType.SCARD.equals( type ) ) {
+                addPackageFromScoreCard( resource, configuration );
             } else {
                 addPackageForExternalType( resource, type, configuration );
             }
@@ -1674,11 +1708,12 @@ public class PackageBuilder
         for ( Field fld : fields ) {
             Position pos = fld.getAnnotation( Position.class );
             if ( pos != null ) {
-                FieldDefinition fldDef = new FieldDefinition( fld.getName(),
-                                                              fld.getType().getName() );
+                FieldDefinition fldDef = clsDef.getField(fld.getName());
+                if (fldDef == null) {
+                    fldDef = new FieldDefinition( fld.getName(), fld.getType().getName() );
+                }
                 fldDef.setIndex( pos.value() );
-                orderedFields.set( pos.value(),
-                                   fldDef );
+                orderedFields.set( pos.value(), fldDef );
             }
         }
         for ( FieldDefinition fld : orderedFields ) {
@@ -2543,9 +2578,9 @@ public class PackageBuilder
      */
     private Class resolveAnnotation(String annotation,
                                     TypeResolver resolver) {
-        // do not waste time with @role and @format
-        if ( TypeDeclaration.Role.ID.equals( annotation )
-             || TypeDeclaration.Format.ID.equals( annotation ) ) {
+
+        // do not waste time with @format
+        if ( TypeDeclaration.Format.ID.equals( annotation ) ) {
             return null;
         }
         // known conflicting annotation
@@ -2557,6 +2592,15 @@ public class PackageBuilder
             return resolver.resolveType( annotation.substring( 0, 1 ).toUpperCase() + annotation.substring( 1 ) );
         } catch ( ClassNotFoundException e ) {
             // internal annotation, or annotation which can't be resolved.
+            if ( TypeDeclaration.Role.ID.equals( annotation ) ) {
+                return Role.class;
+            }
+            if ( "key".equals( annotation ) ) {
+                return Key.class;
+            }
+            if ( "position".equals( annotation ) ) {
+                return Position.class;
+            }
             return null;
         }
     }
@@ -2670,7 +2714,8 @@ public class PackageBuilder
                                                                         annotationName + ": " +
                                                                         nsme.getMessage() + ";" ) );
                 }
-            } else {
+            }
+            if (annotation == null || annotation == Role.class) {
                 def.addMetaData( annotationName, typeDescr.getAnnotation( annotationName ).getSingleValue() );
             }
         }
@@ -3045,7 +3090,8 @@ public class PackageBuilder
                                                                                 "  - undefined property in @annotation " +
                                                                                 annotationName + ": " + nsme.getMessage() + ";" ) );
                         }
-                    } else {
+                    }
+                    if (annotation == null || annotation == Key.class || annotation == Position.class) {
                         fieldDef.addMetaData( annotationName, field.getAnnotation( annotationName ).getSingleValue() );
                     }
                 }
@@ -3814,6 +3860,15 @@ public class PackageBuilder
 
         if ( results != null ) {
             Iterator<KnowledgeBuilderResult> i = results.iterator();
+            while ( i.hasNext() ) {
+                if ( resource.equals( i.next().getResource() ) ) {
+                    i.remove();
+                }
+            }
+        }
+
+        if ( processBuilder != null && processBuilder.getErrors() != null ) {
+            Iterator<? extends KnowledgeBuilderResult> i = processBuilder.getErrors().iterator();
             while ( i.hasNext() ) {
                 if ( resource.equals( i.next().getResource() ) ) {
                     i.remove();

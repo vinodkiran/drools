@@ -1,5 +1,8 @@
 package org.drools.core.common;
 
+import org.kie.internal.utils.ClassLoaderUtil;
+import org.kie.internal.utils.CompositeClassLoader;
+
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URL;
@@ -25,6 +28,22 @@ public class ProjectClassLoader extends ClassLoader {
 
     private ProjectClassLoader(ClassLoader parent) {
         super(parent);
+    }
+
+    public static ClassLoader getClassLoader(final ClassLoader[] classLoaders,
+                                             final Class< ? > cls,
+                                             final boolean enableCache) {
+        if (classLoaders == null || classLoaders.length == 0) {
+            return cls == null ? createProjectClassLoader() : createProjectClassLoader(cls.getClassLoader());
+        } else if (classLoaders.length == 1) {
+            ProjectClassLoader classLoader = createProjectClassLoader(classLoaders[0]);
+            if (cls != null) {
+                classLoader.setDroolsClassLoader(cls.getClassLoader());
+            }
+            return classLoader;
+        } else {
+            return ClassLoaderUtil.getClassLoader(classLoaders, cls, enableCache);
+        }
     }
 
     public static ProjectClassLoader createProjectClassLoader() {
@@ -132,9 +151,11 @@ public class ProjectClassLoader extends ClassLoader {
     }
 
     public void setDroolsClassLoader(ClassLoader droolsClassLoader) {
-        this.droolsClassLoader = droolsClassLoader;
-        if (CACHE_NON_EXISTING_CLASSES) {
-            nonExistingClasses.clear();
+        if (getParent() != droolsClassLoader) {
+            this.droolsClassLoader = droolsClassLoader;
+            if (CACHE_NON_EXISTING_CLASSES) {
+                nonExistingClasses.clear();
+            }
         }
     }
 }

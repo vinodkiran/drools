@@ -1,5 +1,6 @@
 package org.kie.scanner;
 
+import org.drools.core.common.ProjectClassLoader;
 import org.drools.core.util.ClassUtils;
 import org.drools.compiler.kproject.ReleaseIdImpl;
 import org.drools.compiler.kproject.models.KieModuleModelImpl;
@@ -26,8 +27,8 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+import static org.drools.core.util.ClassUtils.convertResourceToClassName;
 import static org.drools.core.util.IoUtils.readBytesFromZipEntry;
-import static org.drools.core.rule.TypeMetaInfo.DEFAULT_TYPE_META_INFO;
 import static org.drools.core.rule.TypeMetaInfo.unmarshallMetaInfos;
 import static org.kie.scanner.ArtifactResolver.getResolverFor;
 
@@ -43,7 +44,7 @@ public class KieModuleMetaDataImpl implements KieModuleMetaData {
 
     private final Map<String, TypeMetaInfo> typeMetaInfos = new HashMap<String, TypeMetaInfo>();
 
-    private CompositeClassLoader classLoader;
+    private ProjectClassLoader classLoader;
 
     private ReleaseId releaseId;
 
@@ -94,13 +95,11 @@ public class KieModuleMetaDataImpl implements KieModuleMetaData {
 
     public TypeMetaInfo getTypeMetaInfo(Class<?> clazz) {
         TypeMetaInfo typeMetaInfo = typeMetaInfos.get(clazz.getName());
-        return typeMetaInfo != null ? typeMetaInfo : DEFAULT_TYPE_META_INFO;
+        return typeMetaInfo != null ? typeMetaInfo : new TypeMetaInfo(clazz);
     }
 
     private ClassLoader getClassLoader() {
         if (classLoader == null) {
-            classLoader = new CompositeClassLoader( );
-
             URL[] urls = new URL[jars.size()];
             int i = 0;
             for (File jar : jars.values()) {
@@ -110,12 +109,14 @@ public class KieModuleMetaDataImpl implements KieModuleMetaData {
                     throw new RuntimeException(e);
                 }
             }
-            classLoader.addClassLoader(new URLClassLoader(urls));
+
+            classLoader = ProjectClassLoader.createProjectClassLoader(new URLClassLoader(urls));
+            classLoader.setDroolsClassLoader(getClass().getClassLoader());
 
             if (kieModule != null) {
                 Map<String, byte[]> classes = kieModule.getClassesMap(true);
-                if ( !classes.isEmpty() ) {
-                    classLoader.addClassLoaderToEnd( new ClassUtils.MapClassLoader( classes, classLoader ) );
+                for (Map.Entry<String, byte[]> entry : classes.entrySet()) {
+                    classLoader.storeClass(convertResourceToClassName(entry.getKey()), entry.getKey(), entry.getValue());
                 }
             }
         }

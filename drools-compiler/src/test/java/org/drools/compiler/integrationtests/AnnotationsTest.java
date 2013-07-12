@@ -35,6 +35,8 @@ import org.drools.core.io.impl.ByteArrayResource;
 import org.junit.Assert;
 import org.junit.Test;
 import org.kie.api.KieBaseConfiguration;
+import org.kie.api.definition.type.Key;
+import org.kie.api.definition.type.Role;
 import org.kie.internal.KnowledgeBase;
 import org.kie.internal.KnowledgeBaseFactory;
 import org.kie.internal.builder.KnowledgeBuilder;
@@ -129,10 +131,11 @@ public class AnnotationsTest  extends CommonTestMethodBase {
         assertNotNull( clazz );
         try {
             Field fld = clazz.getDeclaredField( "name" );
-            assertEquals( 2,
+            assertEquals( 3,
                           fld.getAnnotations().length );
             assertNotNull( fld.getAnnotation( Deprecated.class ) );
             assertNotNull( fld.getAnnotation( Position.class ) );
+            assertNotNull( fld.getAnnotation( Key.class ) );
 
             Position pos = fld.getAnnotation( Position.class );
             assertEquals( 0,
@@ -142,10 +145,11 @@ public class AnnotationsTest  extends CommonTestMethodBase {
         }
 
         Annotation[] anns = clazz.getAnnotations();
-        assertEquals( 2,
+        assertEquals( 3,
                       anns.length );
         assertNotNull( clazz.getAnnotation( Deprecated.class ) );
         assertNotNull( clazz.getAnnotation( Annot.class ) );
+        assertNotNull( clazz.getAnnotation( Role.class ) );
 
         Annot ann = (Annot) clazz.getAnnotation( Annot.class );
         assertEquals( 7,

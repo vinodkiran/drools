@@ -1,9 +1,11 @@
 package org.drools.compiler.compiler;
 
 import junit.framework.Assert;
+import org.drools.core.common.EventFactHandle;
 import org.drools.core.definitions.impl.KnowledgePackageImp;
 import org.drools.core.rule.TypeDeclaration;
 import org.junit.Test;
+import org.kie.api.runtime.rule.FactHandle;
 import org.kie.internal.KnowledgeBase;
 import org.kie.internal.KnowledgeBaseFactory;
 import org.kie.internal.builder.KnowledgeBuilder;
@@ -16,6 +18,7 @@ import org.kie.api.definition.type.FactType;
 import org.kie.internal.io.ResourceFactory;
 import org.kie.api.io.Resource;
 import org.kie.api.io.ResourceType;
+import org.kie.internal.runtime.StatefulKnowledgeSession;
 
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertNotNull;
@@ -457,8 +460,11 @@ public class TypeDeclarationTest {
         assertEquals( "Bean", bean.getSimpleName() );
         assertEquals( "org.drools.compiler.test", bean.getPackageName() );
 
-        assertEquals( 1, bean.getClassAnnotations().size() );
+        assertEquals( 2, bean.getClassAnnotations().size() );
         Annotation ann = bean.getClassAnnotations().get( 0 );
+        if (!ann.getName().equals("org.drools.compiler.compiler.TypeDeclarationTest$KlassAnnotation")) {
+            ann = bean.getClassAnnotations().get( 1 );
+        }
         assertEquals( "org.drools.compiler.compiler.TypeDeclarationTest$KlassAnnotation", ann.getName() );
         assertEquals( "klass", ann.getPropertyValue( "value" ) );
         assertEquals( String.class, ann.getPropertyType( "value" ) );
@@ -468,9 +474,11 @@ public class TypeDeclarationTest {
 
         FactField field = bean.getField( "name" );
         assertNotNull( field );
-        assertEquals( 1, field.getFieldAnnotations().size() );
+        assertEquals( 2, field.getFieldAnnotations().size() );
         Annotation fnn = field.getFieldAnnotations().get( 0 );
-
+        if (!ann.getName().equals("org.drools.compiler.compiler.TypeDeclarationTest$FieldAnnotation")) {
+            ann = bean.getClassAnnotations().get( 1 );
+        }
         assertEquals( "org.drools.compiler.compiler.TypeDeclarationTest$FieldAnnotation", fnn.getName() );
         assertEquals( "fld", fnn.getPropertyValue( "prop" ) );
         assertEquals( String.class, fnn.getPropertyType( "prop" ) );
@@ -480,5 +488,67 @@ public class TypeDeclarationTest {
 
     }
 
+    public static class EventBar {
+        public static class Foo {
 
+        }
+    }
+
+    @Test
+    public void testTypeDeclarationWithInnerClasses() {
+        // DROOLS-150
+        String str = "";
+        str += "package org.drools.compiler;\n" +
+               "\n" +
+               "import org.drools.compiler.compiler.TypeDeclarationTest.EventBar.*;\n" +
+               "" +
+               "declare Foo\n" +
+               " @role( event )\n" +
+               "end\n" +
+               "" +
+               "rule R when Foo() then end";
+
+        KnowledgeBuilder kbuilder = KnowledgeBuilderFactory.newKnowledgeBuilder();
+        kbuilder.add( ResourceFactory.newByteArrayResource( str.getBytes() ),
+                      ResourceType.DRL );
+        System.err.println( kbuilder.getErrors() );
+        assertFalse( kbuilder.hasErrors() );
+
+        KnowledgeBase kBase = KnowledgeBaseFactory.newKnowledgeBase();
+        kBase.addKnowledgePackages( kbuilder.getKnowledgePackages() );
+        StatefulKnowledgeSession knowledgeSession = kBase.newStatefulKnowledgeSession();
+        FactHandle handle = knowledgeSession.insert( new EventBar.Foo() );
+
+        assertTrue( handle instanceof EventFactHandle );
+
+    }
+
+    @Test
+    public void testTypeDeclarationWithInnerClassesImport() {
+        // DROOLS-150
+        String str = "";
+        str += "package org.drools.compiler;\n" +
+               "\n" +
+               "import org.drools.compiler.compiler.TypeDeclarationTest.EventBar.Foo;\n" +
+               "" +
+               "declare Foo\n" +
+               " @role( event )\n" +
+               "end\n" +
+               "" +
+               "rule R when Foo() then end";
+
+        KnowledgeBuilder kbuilder = KnowledgeBuilderFactory.newKnowledgeBuilder();
+        kbuilder.add( ResourceFactory.newByteArrayResource( str.getBytes() ),
+                      ResourceType.DRL );
+        System.err.println( kbuilder.getErrors() );
+        assertFalse( kbuilder.hasErrors() );
+
+        KnowledgeBase kBase = KnowledgeBaseFactory.newKnowledgeBase();
+        kBase.addKnowledgePackages( kbuilder.getKnowledgePackages() );
+        StatefulKnowledgeSession knowledgeSession = kBase.newStatefulKnowledgeSession();
+        FactHandle handle = knowledgeSession.insert( new EventBar.Foo() );
+
+        assertTrue( handle instanceof EventFactHandle );
+
+    }
 }

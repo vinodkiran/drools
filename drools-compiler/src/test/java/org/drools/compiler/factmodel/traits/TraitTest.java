@@ -3409,10 +3409,12 @@ public class TraitTest extends CommonTestMethodBase {
                         "global java.util.List list; \n" +
                         "\n" +
                         "declare trait Foo\n" +
-                        " hardList : List = new ArrayList() " +
-                        " softList : List = new ArrayList() " +
-                        " moreList : List = new ArrayList() " +
-                        " otraList : List = new ArrayList() " +
+                        " hardList : List = new ArrayList() \n" +
+                        " softList : List = new ArrayList() \n" +
+                        " moreList : List = new ArrayList() \n" +
+                        " otraList : List = new ArrayList() \n" +
+                        " primFld : int = 3 \n" +
+                        " primDbl : double = 0.421 \n" +
                         "\n" +
                         "end\n" +
                         "" +
@@ -3433,12 +3435,14 @@ public class TraitTest extends CommonTestMethodBase {
                         "end\n" +
                         "" +
                         "rule Don when\n" +
-                        " $x : Foo( $h : hardList, $s : softList, $o : otraList, $m : moreList ) \n" +
+                        " $x : Foo( $h : hardList, $s : softList, $o : otraList, $m : moreList, $i : primFld, $d : primDbl ) \n" +
                         "then \n" +
                         " list.add( $h ); \n" +
                         " list.add( $s ); \n" +
                         " list.add( $o ); \n" +
                         " list.add( $m ); \n" +
+                        " list.add( $i ); \n" +
+                        " list.add( $d ); \n" +
                         " System.out.println( $x ); \n" +
                         "end\n" +
                         ""
@@ -3447,23 +3451,81 @@ public class TraitTest extends CommonTestMethodBase {
         StatefulKnowledgeSession ks = getSessionFromString( source );
         TraitFactory.setMode( mode, ks.getKieBase() );
 
-        List<List> list = new ArrayList<List>();
+        List list = new ArrayList();
         ks.setGlobal( "list", list );
         ks.fireAllRules();
 
-        assertEquals( 4, list.size() );
+        assertEquals( 6, list.size() );
         assertFalse( list.contains( null ) );
 
-        List hard = list.get( 0 );
-        List soft = list.get( 1 );
-        List otra = list.get( 2 );
-        List more = list.get( 3 );
+        List hard = (List) list.get( 0 );
+        List soft = (List) list.get( 1 );
+        List otra = (List) list.get( 2 );
+        List more = (List) list.get( 3 );
 
         assertTrue( hard.isEmpty() );
         assertTrue( soft.isEmpty() );
         assertEquals( more, Arrays.asList( 1, 2, 3 ) );
         assertEquals( otra, Arrays.asList( 42 ) );
+
+        assertTrue( list.contains( 3 ) );
+        assertTrue( list.contains( 0.421 ) );
+    }
+
+    @Test
+    public void testUnTraitedBeanTriples() {
+        unTraitedBean( TraitFactory.VirtualPropertyMode.TRIPLES );
+    }
+
+    @Test
+    public void testUnTraitedBeanMap() {
+        unTraitedBean( TraitFactory.VirtualPropertyMode.MAP );
     }
 
 
+    public void unTraitedBean( TraitFactory.VirtualPropertyMode mode ) {
+        String source = "package t.x \n" +
+                        "import java.util.*; \n" +
+                        "import org.drools.core.factmodel.traits.Thing \n" +
+                        "import org.drools.core.factmodel.traits.Traitable \n" +
+                        "\n" +
+                        "global java.util.List list; \n" +
+                        "\n" +
+                        "" +
+                        "declare trait Foo end\n" +
+                        "" +
+                        "declare Bar\n" +
+                        " @Traitable\n" +
+                        "end\n" +
+                        "declare Bar2\n" +
+                        "end\n" +
+                        "" +
+                        "rule Init when\n" +
+                        "then\n" +
+                        " Bar o = new Bar();\n" +
+                        " insert(o);\n" +
+                        " Bar2 o2 = new Bar2();\n" +
+                        " insert(o2);\n" +
+                        "end\n" +
+                        "" +
+                        "rule Check when\n" +
+                        " $x : Bar( this not isA Foo ) \n" +
+                        "then \n" +
+                        " System.out.println( $x ); \n" +
+                        "end\n" +
+                        "rule Check2 when\n" +
+                        " $x : Bar2( this not isA Foo ) \n" +
+                        "then \n" +
+                        " System.out.println( $x ); \n" +
+                        "end\n" +
+                        "";
+
+
+        StatefulKnowledgeSession ks = getSessionFromString( source );
+        TraitFactory.setMode( mode, ks.getKieBase() );
+
+        List list = new ArrayList();
+        ks.setGlobal( "list", list );
+        ks.fireAllRules();
+    }
 }
