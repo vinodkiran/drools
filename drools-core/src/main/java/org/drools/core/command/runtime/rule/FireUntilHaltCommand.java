@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,17 +24,34 @@ import org.kie.api.runtime.rule.AgendaFilter;
 import org.kie.api.runtime.rule.StatefulRuleSession;
 import org.kie.internal.command.Context;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlTransient;
+
+@XmlRootElement
+@XmlAccessorType(XmlAccessType.NONE)
 public class FireUntilHaltCommand
-    implements
-    GenericCommand<Void>, UnpersistableCommand {
+	implements
+	GenericCommand<Void>, UnpersistableCommand {
     private static final long serialVersionUID = 510l;
 
+    @XmlTransient
+    // TODO: make sure that all drools AgendaFilter implementations are serializable
     private AgendaFilter agendaFilter = null;
 
     public FireUntilHaltCommand() {
     }
 
     public FireUntilHaltCommand(AgendaFilter agendaFilter) {
+        this.agendaFilter = agendaFilter;
+    }
+
+    public AgendaFilter getAgendaFilter() {
+        return agendaFilter;
+    }
+
+    public void setAgendaFilter(AgendaFilter agendaFilter) {
         this.agendaFilter = agendaFilter;
     }
 

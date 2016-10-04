@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,6 +81,8 @@ public class Rete extends ObjectSource
         super( 0, RuleBasePartitionId.MAIN_PARTITION, kBase != null && kBase.getConfiguration().isMultithreadEvaluation() );
         this.entryPoints = Collections.synchronizedMap( new HashMap<EntryPointId, EntryPointNode>() );
         this.kBase = kBase;
+
+        hashcode = calculateHashCode();
     }
 
     public short getType() {
@@ -199,21 +201,20 @@ public class Rete extends ObjectSource
         return this.kBase;
     }
 
-    public int hashCode() {
+    private int calculateHashCode() {
         return this.entryPoints.hashCode();
     }
 
     public boolean equals(final Object object) {
-        if ( object == this ) {
-            return true;
-        }
+        return this == object || internalEquals( object );
+    }
 
-        if ( object == null || !(object instanceof Rete) ) {
+    @Override
+    protected boolean internalEquals( Object object ) {
+        if ( object == null || !(object instanceof Rete) || this.hashCode() != object.hashCode() ) {
             return false;
         }
-
-        final Rete other = (Rete) object;
-        return this.entryPoints.equals( other.entryPoints );
+        return this.entryPoints.equals( ((Rete)object).entryPoints );
     }
 
     public void updateSink(final ObjectSink sink,

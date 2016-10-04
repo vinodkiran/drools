@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,6 +176,12 @@ public class PatternDescr extends AnnotatedBaseDescr
     public void setSource( PatternSourceDescr source ) {
         this.source = source;
     }
+
+    @Override
+    public void setResource(org.kie.api.io.Resource resource) {
+        super.setResource(resource);
+        ((BaseDescr) this.constraint).setResource(resource);
+    };
 
     /**
      * @return the behaviors

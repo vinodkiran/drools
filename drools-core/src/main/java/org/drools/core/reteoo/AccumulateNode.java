@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,6 +81,12 @@ public class AccumulateNode extends BetaNode {
         this.accumulate = accumulate;
         this.unwrapRightObject = unwrapRightObject;
         this.tupleMemoryEnabled = context.isTupleMemoryEnabled();
+
+        hashcode = this.leftInput.hashCode() ^
+                   this.rightInput.hashCode() ^
+                   this.accumulate.hashCode() ^
+                   this.resultBinder.hashCode() ^
+                   Arrays.hashCode( this.resultConstraints );
     }
 
     public void readExternal( ObjectInput in ) throws IOException,
@@ -158,33 +164,29 @@ public class AccumulateNode extends BetaNode {
         super.attach( context );
     }
 
-    /* (non-Javadoc)
-         * @see org.kie.reteoo.BaseNode#hashCode()
-         */
-    public int hashCode() {
-        return this.leftInput.hashCode() ^ this.rightInput.hashCode() ^ this.accumulate.hashCode() ^ this.resultBinder.hashCode() ^ Arrays.hashCode( this.resultConstraints );
+    protected int calculateHashCode() {
+        return 0;
     }
 
-    /* (non-Javadoc)
-     * @see java.lang.Object#equals(java.lang.Object)
-     */
+    @Override
     public boolean equals( final Object object ) {
-        if ( this == object ) {
-            return true;
-        }
+        return this == object ||
+               ( internalEquals( object ) &&
+               this.leftInput.thisNodeEquals( ((AccumulateNode) object).leftInput ) &&
+               this.rightInput.thisNodeEquals( ((AccumulateNode) object).rightInput ) );
+    }
 
-        if ( object == null || !(object instanceof AccumulateNode) ) {
+    @Override
+    protected boolean internalEquals( Object object ) {
+        if ( object == null || !(object instanceof AccumulateNode ) || this.hashCode() != object.hashCode() ) {
             return false;
         }
 
-        final AccumulateNode other = (AccumulateNode) object;
-
-        if ( this.getClass() != other.getClass() || (!this.leftInput.equals( other.leftInput )) || (!this.rightInput.equals( other.rightInput )) || (!this.constraints.equals( other.constraints )) ) {
-            return false;
-        }
-
-        return this.accumulate.equals( other.accumulate ) && resultBinder.equals( other.resultBinder ) && Arrays.equals( this.resultConstraints,
-                                                                                                                         other.resultConstraints );
+        AccumulateNode other = (AccumulateNode) object;
+        return this.constraints.equals( other.constraints ) &&
+               this.accumulate.equals( other.accumulate ) &&
+               resultBinder.equals( other.resultBinder ) &&
+               Arrays.equals( this.resultConstraints, other.resultConstraints );
     }
 
     /**
@@ -199,21 +201,16 @@ public class AccumulateNode extends BetaNode {
 
         memory.workingMemoryContext = this.accumulate.createWorkingMemoryContext();
         memory.resultsContext = this.resultBinder.createContext();
-        memory.alphaContexts = new ContextEntry[this.resultConstraints.length];
-        for ( int i = 0; i < this.resultConstraints.length; i++ ) {
-            memory.alphaContexts[i] = this.resultConstraints[i].createContextEntry();
-        }
         return memory;
     }
 
     public static abstract class AccumulateMemory extends AbstractBaseLinkedListNode<Memory>
         implements
-        Memory {
+        SegmentNodeMemory {
 
         public Object             workingMemoryContext;
         private final BetaMemory  betaMemory;
         public ContextEntry[]     resultsContext;
-        public ContextEntry[]     alphaContexts;
 
         protected AccumulateMemory( BetaMemory betaMemory ) {
             this.betaMemory = betaMemory;
@@ -236,6 +233,26 @@ public class AccumulateNode extends BetaNode {
         }
 
         public abstract void reset();
+
+        @Override
+        public long getNodePosMaskBit() {
+            return betaMemory.getNodePosMaskBit();
+        }
+
+        @Override
+        public void setNodePosMaskBit( long segmentPos ) {
+            betaMemory.setNodePosMaskBit( segmentPos );
+        }
+
+        @Override
+        public void setNodeDirtyWithoutNotify() {
+            betaMemory.setNodeDirtyWithoutNotify();
+        }
+
+        @Override
+        public void setNodeCleanWithoutNotify() {
+            betaMemory.setNodeCleanWithoutNotify();
+        }
     }
 
     public static class SingleAccumulateMemory extends AccumulateMemory {
@@ -331,19 +348,19 @@ public class AccumulateNode extends BetaNode {
     }
 
     public LeftTuple createLeftTuple(InternalFactHandle factHandle,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new FromNodeLeftTuple(factHandle, sink, leftTupleMemoryEnabled);
     }
 
     public LeftTuple createLeftTuple(final InternalFactHandle factHandle,
                                      final LeftTuple leftTuple,
-                                     final LeftTupleSink sink) {
+                                     final Sink sink) {
         return new FromNodeLeftTuple(factHandle, leftTuple, sink);
     }
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      PropagationContext pctx,
                                      boolean leftTupleMemoryEnabled) {
         return new FromNodeLeftTuple(leftTuple, sink, pctx, leftTupleMemoryEnabled);
@@ -351,7 +368,7 @@ public class AccumulateNode extends BetaNode {
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
                                      RightTuple rightTuple,
-                                     LeftTupleSink sink) {
+                                     Sink sink) {
         return new FromNodeLeftTuple(leftTuple, rightTuple, sink);
     }
 
@@ -359,7 +376,7 @@ public class AccumulateNode extends BetaNode {
                                      RightTuple rightTuple,
                                      LeftTuple currentLeftChild,
                                      LeftTuple currentRightChild,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new FromNodeLeftTuple(leftTuple, rightTuple, currentLeftChild, currentRightChild, sink, leftTupleMemoryEnabled);
     }

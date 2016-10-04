@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.drools.core.rule;
 import org.drools.core.common.EventFactHandle;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalWorkingMemory;
-import org.drools.core.common.PropagationContextFactory;
 import org.drools.core.common.WorkingMemoryAction;
 import org.drools.core.marshalling.impl.MarshallerReaderContext;
 import org.drools.core.marshalling.impl.MarshallerWriteContext;
@@ -46,6 +45,8 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.Collection;
 import java.util.PriorityQueue;
+
+import static org.drools.core.common.PhreakPropagationContextFactory.createPropagationContextForFact;
 
 public class SlidingTimeWindow
         implements
@@ -173,9 +174,7 @@ public class SlidingTimeWindow
             queue.remove();
             if( handle.isValid()) {
                 // if not expired yet, expire it
-                PropagationContextFactory pctxFactory = workingMemory.getKnowledgeBase().getConfiguration().getComponentFactory().getPropagationContextFactory();
-                final PropagationContext expiresPctx = pctxFactory.createPropagationContext(workingMemory.getNextPropagationIdCounter(), PropagationContext.EXPIRATION,
-                                                                                            null, null, handle);
+                final PropagationContext expiresPctx = createPropagationContextForFact( workingMemory, handle, PropagationContext.EXPIRATION );
                 ObjectTypeNode.doRetractObject(handle, expiresPctx, workingMemory);
                 expiresPctx.evaluateActionQueue( workingMemory );
             }
@@ -297,7 +296,7 @@ public class SlidingTimeWindow
             EventFactHandle handle = slCtx.peek();
             outputCtx.writeInt( handle.getId() );
 
-//            BetaNode node = (BetaNode) handle.getRightTupleSink();
+//            BetaNode node = (BetaNode) handle.getTupleSink();
 //            outputCtx.writeInt( node.getId() );
 //
 //            Behavior[] behaviors = node.getBehaviors();

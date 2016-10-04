@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,12 @@
 
 package org.drools.core.base;
 
+import org.drools.core.common.EventFactHandle;
+import org.drools.core.factmodel.traits.Thing;
+import org.drools.core.factmodel.traits.Trait;
+import org.drools.core.facttemplates.FactTemplate;
+import org.drools.core.util.MathUtils;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -24,12 +30,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Date;
 
-import org.drools.core.common.EventFactHandle;
-import org.drools.core.factmodel.traits.Thing;
-import org.drools.core.factmodel.traits.Trait;
-import org.drools.core.facttemplates.FactTemplate;
-
-public class ValueType
+public class ValueType<T>
     implements
     Externalizable {
 
@@ -94,12 +95,9 @@ public class ValueType
                                                                         Number.class,
                                                                         SimpleValueType.DATE );
    
-    public static final ValueType  BIG_DECIMAL_TYPE  = new ValueType( "BigDecimal",
-                                                                      BigDecimal.class,
-                                                                      SimpleValueType.NUMBER );
-    public static final ValueType  BIG_INTEGER_TYPE  = new ValueType( "BigInteger",
-                                                                      BigInteger.class,
-                                                                      SimpleValueType.NUMBER );
+    public static final ValueType  BIG_DECIMAL_TYPE  = new BigDecimalValueType();
+
+    public static final ValueType  BIG_INTEGER_TYPE  = new BigIntegerValueType();
     
     
     // other types    
@@ -109,9 +107,9 @@ public class ValueType
     public static final ValueType  ARRAY_TYPE        = new ValueType( "Array",
                                                                       Object[].class,
                                                                       SimpleValueType.LIST );
-    public static final ValueType  STRING_TYPE       = new ValueType( "String",
-                                                                      String.class,
-                                                                      SimpleValueType.STRING );
+
+    public static final ValueType  STRING_TYPE       = new StringValueType();
+
     public static final ValueType  OBJECT_TYPE       = new ValueType( "Object",
                                                                       Object.class,
                                                                       SimpleValueType.OBJECT );
@@ -134,7 +132,7 @@ public class ValueType
                                                                       SimpleValueType.OBJECT );
 
     private String           name;
-    private Class<?>         classType;
+    private Class<T>         classType;
     private int              simpleType;
 
     public ValueType() {
@@ -142,7 +140,7 @@ public class ValueType
     }
 
     private ValueType(final String name,
-                      final Class<?> classType,
+                      final Class<T> classType,
                       final int simpleType) {
         this.name = name;
         this.classType = classType;
@@ -151,7 +149,7 @@ public class ValueType
 
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
         name        = (String)in.readObject();
-        classType   = (Class<?>)in.readObject();
+        classType   = (Class<T>)in.readObject();
         simpleType  = in.readInt();
     }
 
@@ -175,7 +173,7 @@ public class ValueType
     /* (non-Javadoc)
      * @see org.kie.base.ValueTypeInterface#getClassType()
      */
-    public Class<?> getClassType() {
+    public Class<T> getClassType() {
         return this.classType;
     }
 
@@ -241,7 +239,7 @@ public class ValueType
         
         
         // Other Object types
-        if ( Date.class.isAssignableFrom( clazz ) ) {
+        if ( isDateType( clazz ) ) {
             return ValueType.DATE_TYPE;
         } else if ( clazz.isArray() ) {
             return ValueType.ARRAY_TYPE;
@@ -257,6 +255,10 @@ public class ValueType
         } else {
             return ValueType.OBJECT_TYPE;
         }
+    }
+
+    public static boolean isDateType( Class<?> clazz ) {
+        return Date.class.isAssignableFrom( clazz );
     }
 
     public String toString() {
@@ -328,4 +330,49 @@ public class ValueType
         return this.classType == EventFactHandle.class;
     }
 
+    public T coerce(Object value) {
+        return (T)value;
+    }
+
+    public static class StringValueType extends ValueType<String> {
+        public StringValueType() {
+            super("String", String.class, SimpleValueType.STRING);
+        }
+
+        @Override
+        public String coerce( Object value ) {
+            if (value == null) {
+                return null;
+            }
+            return value instanceof String ? (String)value : value.toString();
+        }
+    }
+
+    public static class BigIntegerValueType extends ValueType<BigInteger> {
+        public BigIntegerValueType() {
+            super("BigInteger", BigInteger.class, SimpleValueType.NUMBER);
+        }
+
+        @Override
+        public BigInteger coerce( Object value ) {
+            if (value == null) {
+                return null;
+            }
+            return MathUtils.getBigInteger( value );
+        }
+    }
+
+    public static class BigDecimalValueType extends ValueType<BigDecimal> {
+        public BigDecimalValueType() {
+            super("BigDecimal", BigDecimal.class, SimpleValueType.NUMBER);
+        }
+
+        @Override
+        public BigDecimal coerce( Object value ) {
+            if (value == null) {
+                return null;
+            }
+            return MathUtils.getBigDecimal( value );
+        }
+    }
 }

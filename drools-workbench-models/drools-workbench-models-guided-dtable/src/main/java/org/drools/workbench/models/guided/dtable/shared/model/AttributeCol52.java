@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -75,7 +75,7 @@ public class AttributeCol52 extends DTColumnConfig52 {
     }
 
     /**
-     * Clones this metadata column instance.
+     * Clones this attribute column instance.
      * @return The cloned instance.
      */
     public AttributeCol52 cloneColumn() {
@@ -83,10 +83,7 @@ public class AttributeCol52 extends DTColumnConfig52 {
         cloned.setAttribute( getAttribute() );
         cloned.setReverseOrder( isReverseOrder() );
         cloned.setUseRowNumber( isUseRowNumber() );
-        cloned.setWidth( getWidth() );
-        cloned.setHideColumn( isHideColumn() );
-        cloned.setHeader( getHeader() );
-        cloned.setDefaultValue( getDefaultValue() != null ? getDefaultValue().cloneDefaultValueCell() : null );
+        cloned.cloneCommonColumnConfigFrom( this );
         return cloned;
     }
 

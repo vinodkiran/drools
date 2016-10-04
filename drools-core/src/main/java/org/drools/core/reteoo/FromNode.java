@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,20 +28,23 @@ import org.drools.core.marshalling.impl.PersisterHelper;
 import org.drools.core.marshalling.impl.ProtobufInputMarshaller.TupleKey;
 import org.drools.core.marshalling.impl.ProtobufMessages.FactHandle;
 import org.drools.core.reteoo.builder.BuildContext;
-import org.drools.core.rule.ContextEntry;
 import org.drools.core.rule.From;
 import org.drools.core.spi.AlphaNodeFieldConstraint;
 import org.drools.core.spi.DataProvider;
 import org.drools.core.spi.PropagationContext;
+import org.drools.core.spi.Tuple;
 import org.drools.core.util.AbstractBaseLinkedListNode;
-import org.drools.core.util.index.LeftTupleList;
+import org.drools.core.util.index.TupleList;
 
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import static org.drools.core.util.ClassUtils.areNullSafeEquals;
 
 public class FromNode<T extends FromNode.FromMemory> extends LeftTupleSource
     implements
@@ -84,6 +87,8 @@ public class FromNode<T extends FromNode.FromMemory> extends LeftTupleSource
         resultClass = this.from.getResultClass();
 
         initMasks(context, tupleSource);
+
+        hashcode = calculateHashCode();
     }
 
     public void readExternal(ObjectInput in) throws IOException,
@@ -104,6 +109,39 @@ public class FromNode<T extends FromNode.FromMemory> extends LeftTupleSource
         out.writeObject( betaConstraints );
         out.writeBoolean( tupleMemoryEnabled );
         out.writeObject( from );
+    }
+
+    private int calculateHashCode() {
+        int hash = ( 23 * leftInput.hashCode() ) + ( 29 * dataProvider.hashCode() );
+        if (from.getResultPattern() != null) {
+            hash += 31 * from.getResultPattern().hashCode();
+        }
+        if (alphaConstraints != null) {
+            hash += 37 * Arrays.hashCode( alphaConstraints );
+        }
+        if (betaConstraints != null) {
+            hash += 41 * betaConstraints.hashCode();
+        }
+        return hash;
+    }
+
+    @Override
+    public boolean equals( Object object ) {
+        return this == object || (internalEquals( object ) && leftInput.thisNodeEquals( ((FromNode) object).leftInput ) );
+    }
+
+    @Override
+    protected boolean internalEquals( Object obj ) {
+        if (obj == null || !(obj instanceof FromNode ) || this.hashCode() != obj.hashCode() ) {
+            return false;
+        }
+
+        FromNode other = (FromNode) obj;
+
+        return dataProvider.equals( other.dataProvider ) &&
+               areNullSafeEquals(from.getResultPattern(), other.from.getResultPattern() ) &&
+               Arrays.equals( alphaConstraints, other.alphaConstraints ) &&
+               betaConstraints.equals( other.betaConstraints );
     }
 
     public DataProvider getDataProvider() {
@@ -132,10 +170,10 @@ public class FromNode<T extends FromNode.FromMemory> extends LeftTupleSource
                                         final PropagationContext context,
                                         final InternalWorkingMemory workingMemory,
                                         final Object object ) {
-        return new RightTuple( createFactHandle( leftTuple, context, workingMemory, object ) );
+        return new RightTupleImpl( createFactHandle( leftTuple, context, workingMemory, object ) );
     }
 
-    public InternalFactHandle createFactHandle( LeftTuple leftTuple, PropagationContext context, InternalWorkingMemory workingMemory, Object object ) {
+    public InternalFactHandle createFactHandle( Tuple leftTuple, PropagationContext context, InternalWorkingMemory workingMemory, Object object ) {
         FactHandle _handle = null;
         if ( objectTypeConf == null ) {
             // use default entry point and object class. Notice that at this point object is assignable to resultClass
@@ -194,13 +232,12 @@ public class FromNode<T extends FromNode.FromMemory> extends LeftTupleSource
 
 
     public T createMemory(final RuleBaseConfiguration config, InternalWorkingMemory wm) {
-        BetaMemory beta = new BetaMemory( new LeftTupleList(),
+        BetaMemory beta = new BetaMemory( new TupleList(),
                                           null,
                                           this.betaConstraints.createContext(),
                                           NodeTypeEnums.FromNode );
         return (T) new FromMemory( beta,
-                                   this.dataProvider,
-                                   this.alphaConstraints );
+                                   this.dataProvider );
     }
    
 
@@ -263,25 +300,19 @@ public class FromNode<T extends FromNode.FromMemory> extends LeftTupleSource
     public static class FromMemory extends AbstractBaseLinkedListNode<Memory>
         implements
         Serializable,
-        Memory {
+        SegmentNodeMemory {
         private static final long serialVersionUID = 510l;
 
         private DataProvider      dataProvider;
 
         private final BetaMemory         betaMemory;
-        private final ContextEntry[]     alphaContexts;
         public Object                    providerContext;
 
         public FromMemory(BetaMemory betaMemory,
-                          DataProvider dataProvider,
-                          AlphaNodeFieldConstraint[] constraints) {
+                          DataProvider dataProvider) {
             this.betaMemory = betaMemory;
             this.dataProvider = dataProvider;
             this.providerContext = dataProvider.createContext();
-            this.alphaContexts = new ContextEntry[constraints.length];
-            for ( int i = 0; i < constraints.length; i++ ) {
-                this.alphaContexts[i] = constraints[i].createContextEntry();
-            }
         }
 
         public short getNodeType() {
@@ -300,30 +331,46 @@ public class FromNode<T extends FromNode.FromMemory> extends LeftTupleSource
             return betaMemory;
         }
 
-        public ContextEntry[] getAlphaContexts() {
-            return alphaContexts;
-        }
-
         public void reset() {
             this.betaMemory.reset();
             this.providerContext = dataProvider.createContext();
         }
+
+        @Override
+        public long getNodePosMaskBit() {
+            return betaMemory.getNodePosMaskBit();
+        }
+
+        @Override
+        public void setNodePosMaskBit( long segmentPos ) {
+            betaMemory.setNodePosMaskBit( segmentPos );
+        }
+
+        @Override
+        public void setNodeDirtyWithoutNotify() {
+            betaMemory.setNodeDirtyWithoutNotify();
+        }
+
+        @Override
+        public void setNodeCleanWithoutNotify() {
+            betaMemory.setNodeCleanWithoutNotify();
+        }
     }
     
     public LeftTuple createLeftTuple(InternalFactHandle factHandle,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new FromNodeLeftTuple(factHandle, sink, leftTupleMemoryEnabled );
     }
 
     public LeftTuple createLeftTuple(final InternalFactHandle factHandle,
                                      final LeftTuple leftTuple,
-                                     final LeftTupleSink sink) {
+                                     final Sink sink) {
         return new FromNodeLeftTuple(factHandle,leftTuple, sink );
     }
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      PropagationContext pctx, boolean leftTupleMemoryEnabled) {
         return new FromNodeLeftTuple(leftTuple, sink, pctx,
                                      leftTupleMemoryEnabled );
@@ -331,7 +378,7 @@ public class FromNode<T extends FromNode.FromMemory> extends LeftTupleSource
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
                                      RightTuple rightTuple,
-                                     LeftTupleSink sink) {
+                                     Sink sink) {
         return new FromNodeLeftTuple(leftTuple, rightTuple, sink );
     }   
     
@@ -339,7 +386,7 @@ public class FromNode<T extends FromNode.FromMemory> extends LeftTupleSource
                                      RightTuple rightTuple,
                                      LeftTuple currentLeftChild,
                                      LeftTuple currentRightChild,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new FromNodeLeftTuple(leftTuple, rightTuple, currentLeftChild, currentRightChild, sink, leftTupleMemoryEnabled );        
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -755,7 +755,7 @@ public class ExtensibleXmlParser extends DefaultHandler {
     }
 
     /**
-     * Intializes EntityResolver that is configured via system property ENTITY_RESOLVER_PROPERTY_NAME.
+     * Initializes EntityResolver that is configured via system property ENTITY_RESOLVER_PROPERTY_NAME.
      */
     private void initEntityResolver() {
         final String entityResolveClazzName = System.getProperty( ExtensibleXmlParser.ENTITY_RESOLVER_PROPERTY_NAME );

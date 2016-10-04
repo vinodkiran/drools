@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,6 +131,8 @@ public class ActionCallMethodBuilder {
 
     private ActionFieldFunction getActionFieldFunction( String param,
                                                         String dataType ) {
+        param = removeNumericSuffix( param,
+                                     dataType );
         final int fieldNature = inferFieldNature( dataType,
                                                   param,
                                                   boundParams,
@@ -142,6 +144,9 @@ public class ActionCallMethodBuilder {
             case FieldNatureType.TYPE_FORMULA:
                 break;
             case FieldNatureType.TYPE_VARIABLE:
+                break;
+            case FieldNatureType.TYPE_TEMPLATE:
+                paramValue = unwrapTemplateKey( param );
                 break;
             default:
                 paramValue = adjustParam( dataType,
@@ -233,9 +238,11 @@ public class ActionCallMethodBuilder {
     private String assertParamDataType( final String methodParamDataType,
                                         final String paramValue ) {
         if ( boundParams.containsKey( paramValue ) ) {
-            final String boundParamDataType = boundParams.get( paramValue );
-            return boundParamDataType;
+            //If the parameter is a bound variable use the MethodInfo data-type
+            return methodParamDataType;
+
         } else {
+            //Otherwise try coercing the parameter value into the method data-type until a match is found
             if ( DataType.TYPE_BOOLEAN.equals( methodParamDataType ) ) {
                 if ( Boolean.TRUE.equals( Boolean.parseBoolean( paramValue ) ) || Boolean.FALSE.equals( Boolean.parseBoolean( paramValue ) ) ) {
                     return methodParamDataType;

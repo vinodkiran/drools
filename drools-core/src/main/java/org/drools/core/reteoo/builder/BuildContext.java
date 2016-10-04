@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,24 +21,18 @@ import org.drools.core.common.InternalWorkingMemory;
 import org.drools.core.common.RuleBasePartitionId;
 import org.drools.core.definitions.rule.impl.RuleImpl;
 import org.drools.core.impl.InternalKnowledgeBase;
-import org.drools.core.reteoo.KieComponentFactory;
-import org.drools.core.reteoo.LeftTupleSource;
-import org.drools.core.reteoo.ObjectSource;
-import org.drools.core.reteoo.ObjectTypeNode;
-import org.drools.core.reteoo.ReteooBuilder;
+import org.drools.core.reteoo.*;
 import org.drools.core.rule.EntryPointId;
 import org.drools.core.rule.GroupElement;
 import org.drools.core.rule.Pattern;
 import org.drools.core.rule.RuleConditionElement;
+import org.drools.core.rule.constraint.XpathConstraint;
 import org.drools.core.spi.AlphaNodeFieldConstraint;
 import org.drools.core.spi.BetaNodeFieldConstraint;
 import org.drools.core.spi.RuleComponent;
 import org.drools.core.time.TemporalDependencyMatrix;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Stack;
+import java.util.*;
 
 /**
  * A build context for Reteoo Builder
@@ -70,11 +64,15 @@ public class BuildContext {
     private List<BetaNodeFieldConstraint>    betaconstraints;
     // alpha constraints from the last pattern attached
     private List<AlphaNodeFieldConstraint>   alphaConstraints;
+    // xpath constraints from the last pattern attached
+    private List<XpathConstraint>            xpathConstraints;
     // the current entry point
-    private EntryPointId                       currentEntryPoint;
+    private EntryPointId                     currentEntryPoint;
     private boolean                          tupleMemoryEnabled;
     private boolean                          objectTypeNodeMemoryEnabled;
     private boolean                          query;
+
+    private List<PathEndNode>                pathEndNodes = new ArrayList<PathEndNode>();
     /**
      * Stores the list of nodes being added that require partitionIds
      */
@@ -93,10 +91,12 @@ public class BuildContext {
     //  "this == " + BASE_IDENTIFIER $__forallBaseIdentifier
     // Which we don't want to actually count in the case of forall node linking    
     private boolean                          emptyForAllBetaConstraints;
-    private KieComponentFactory              componentFactory;
     private boolean                          attachPQN;
-
     private boolean                          terminated;
+
+    private final KieComponentFactory        componentFactory;
+
+    private String                           consequenceName;
 
     public BuildContext(final InternalKnowledgeBase kBase,
                         final ReteooBuilder.IdGenerator idGenerator) {
@@ -224,8 +224,6 @@ public class BuildContext {
 
     /**
      * Returns context rulebase
-     *
-     * @return
      */
     public InternalKnowledgeBase getKnowledgeBase() {
         return this.kBase;
@@ -234,8 +232,6 @@ public class BuildContext {
     /**
      * Return the array of working memories associated with the given
      * rulebase.
-     *
-     * @return
      */
     public InternalWorkingMemory[] getWorkingMemories() {
         if (this.workingMemories == null) {
@@ -246,8 +242,6 @@ public class BuildContext {
 
     /**
      * Returns an Id for the next node
-     *
-     * @return
      */
     public int getNextId() {
         return this.idGenerator.getNextId();
@@ -262,8 +256,6 @@ public class BuildContext {
 
     /**
      * Adds the rce to the build stack
-     *
-     * @param rce
      */
     public void push(final RuleConditionElement rce) {
         if (this.buildstack == null) {
@@ -274,8 +266,6 @@ public class BuildContext {
 
     /**
      * Removes the top stack element
-     *
-     * @return
      */
     public RuleConditionElement pop() {
         if (this.buildstack == null) {
@@ -286,8 +276,6 @@ public class BuildContext {
 
     /**
      * Returns the top stack element without removing it
-     *
-     * @return
      */
     public RuleConditionElement peek() {
         if (this.buildstack == null) {
@@ -298,8 +286,6 @@ public class BuildContext {
 
     /**
      * Returns a list iterator to iterate over the stacked elements
-     *
-     * @return
      */
     public ListIterator<RuleConditionElement> stackIterator() {
         if (this.buildstack == null) {
@@ -308,29 +294,36 @@ public class BuildContext {
         return this.buildstack.listIterator(this.buildstack.size());
     }
 
-    /**
-     * @return the betaconstraints
-     */
     public List<BetaNodeFieldConstraint> getBetaconstraints() {
         return this.betaconstraints;
     }
 
-    /**
-     * @param betaconstraints the betaconstraints to set
-     */
     public void setBetaconstraints(final List<BetaNodeFieldConstraint> betaconstraints) {
         this.betaconstraints = betaconstraints;
     }
 
-    /**
-     * @return
-     */
     public List<AlphaNodeFieldConstraint> getAlphaConstraints() {
         return alphaConstraints;
     }
 
     public void setAlphaConstraints(List<AlphaNodeFieldConstraint> alphaConstraints) {
         this.alphaConstraints = alphaConstraints;
+    }
+
+    public List<XpathConstraint> getXpathConstraints() {
+        return xpathConstraints;
+    }
+
+    public List<PathEndNode> getPathEndNodes() {
+        return pathEndNodes;
+    }
+
+    public void addPathEndNode(PathEndNode node) {
+        pathEndNodes.add(node);
+    }
+
+    public void setXpathConstraints(List<XpathConstraint> xpathConstraints) {
+        this.xpathConstraints = xpathConstraints;
     }
 
     public boolean isTupleMemoryEnabled() {
@@ -440,8 +433,6 @@ public class BuildContext {
      * The rule component stack is used to add trackability to
      * the ReteOO nodes so that they can be linked to the rule
      * components that originated them.
-     *
-     * @return
      */
     public RuleComponent popRuleComponent() {
         return this.ruleComponent.pop();
@@ -452,8 +443,6 @@ public class BuildContext {
      * The rule component stack is used to add trackability to
      * the ReteOO nodes so that they can be linked to the rule
      * components that originated them.
-     *
-     * @return
      */
     public RuleComponent peekRuleComponent() {
         return this.ruleComponent.isEmpty() ? null : this.ruleComponent.peek();
@@ -464,8 +453,6 @@ public class BuildContext {
      * The rule component stack is used to add trackability to
      * the ReteOO nodes so that they can be linked to the rule
      * components that originated them.
-     *
-     * @return
      */
     public void pushRuleComponent(RuleComponent ruleComponent) {
         this.ruleComponent.push(ruleComponent);
@@ -504,15 +491,19 @@ public class BuildContext {
         return componentFactory;
     }
 
-    public void setComponentFactory(KieComponentFactory componentFactory) {
-        this.componentFactory = componentFactory;
-    }
-
     public boolean isTerminated() {
         return terminated;
     }
 
     public void setTerminated(boolean terminated) {
         this.terminated = terminated;
+    }
+
+    public String getConsequenceName() {
+        return consequenceName;
+    }
+
+    public void setConsequenceName( String consequenceName ) {
+        this.consequenceName = consequenceName;
     }
 }

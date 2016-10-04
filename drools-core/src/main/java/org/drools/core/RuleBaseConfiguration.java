@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.drools.core.util.Drools.isJmxAvailable;
 import static org.drools.core.util.MemoryUtil.hasPermGen;
 
 /**
@@ -430,6 +431,8 @@ public class RuleBaseConfiguration
     }
     
     private void init(Properties properties) {
+        this.componentFactory = new KieComponentFactory();
+
         this.immutable = false;
 
         this.chainedProperties = new ChainedProperties( "rulebase.conf",
@@ -500,9 +503,6 @@ public class RuleBaseConfiguration
 
         setDeclarativeAgendaEnabled( Boolean.valueOf( this.chainedProperties.getProperty( DeclarativeAgendaOption.PROPERTY_NAME,
                                                                                           "false" ) ) );        
-
-        this.componentFactory = new KieComponentFactory();
-
     }
 
     /**
@@ -581,7 +581,7 @@ public class RuleBaseConfiguration
         if (permGenThreshold < 0 || permGenThreshold > 100) {
             throw new UnsupportedOperationException( "The PermGen threshold should be a number between 0 and 100" );
         }
-        if (!hasPermGen()) {
+        if (isJmxAvailable() && !hasPermGen()) {
             if (permGenThreshold != PermGenThresholdOption.DEFAULT_VALUE) {
                 logger.warn( "JVM version " + System.getProperty("java.version") + " has no PermGen space. " +
                              "Attempt to set the permgenThreshold to " + permGenThreshold + " will be ignored");

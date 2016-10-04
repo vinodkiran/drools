@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import org.drools.core.common.PropagationContextFactory;
 import org.drools.core.definitions.rule.impl.RuleImpl;
 import org.drools.core.impl.InternalKnowledgeBase;
 import org.drools.core.impl.StatefulKnowledgeSessionImpl;
-import org.drools.core.reteoo.AlphaNode.AlphaMemory;
 import org.drools.core.reteoo.builder.BuildContext;
 import org.drools.core.rule.MvelConstraintTestUtil;
 import org.drools.core.rule.constraint.MvelConstraint;
@@ -37,8 +36,6 @@ import org.drools.core.test.model.DroolsTestCase;
 import org.junit.Before;
 import org.junit.Test;
 import org.kie.internal.KnowledgeBaseFactory;
-
-import java.beans.IntrospectionException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
@@ -91,9 +88,6 @@ public class AlphaNodeTest extends DroolsTestCase {
         // check sink is empty
         assertLength( 0,
                       sink.getAsserted() );
-
-        // check alpha memory is empty 
-        final AlphaMemory memory = (AlphaMemory) ksession.getNodeMemory( alphaNode );
 
         // object should assert as it passes text
         alphaNode.assertObject( f0,
@@ -192,7 +186,7 @@ public class AlphaNodeTest extends DroolsTestCase {
     }
 
     @Test
-    public void testUpdateSinkWithoutMemory() throws IntrospectionException {
+    public void testUpdateSinkWithoutMemory() {
         // An AlphaNode should try and repropagate from its source
         InternalKnowledgeBase kBase = (InternalKnowledgeBase) KnowledgeBaseFactory.newKnowledgeBase();
         BuildContext buildContext = new BuildContext( kBase,
@@ -219,7 +213,7 @@ public class AlphaNodeTest extends DroolsTestCase {
                                                    source,
                                                    buildContext ); // no memory
 
-        alphaNode.attach();
+        alphaNode.attach(buildContext);
 
         final MockObjectSink sink1 = new MockObjectSink();
         alphaNode.addObjectSink( sink1 );

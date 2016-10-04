@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ public class KieSessionModelImpl
 
     private BeliefSystemTypeOption           beliefSystem = BeliefSystemTypeOption.get(BeliefSystemType.SIMPLE.toString());
 
-    private String                           scope = "javax.enterprise.context.ApplicationScoped";
+    private String                           scope;
 
     private KieBaseModelImpl                 kBase;
 

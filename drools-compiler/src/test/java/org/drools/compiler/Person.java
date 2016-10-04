@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ package org.drools.compiler;
 
 import org.drools.core.factmodel.traits.Traitable;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 @Traitable
+@XmlAccessorType(XmlAccessType.FIELD)
 public class Person
         implements
         Serializable,
@@ -50,24 +53,28 @@ public class Person
 
     private Address address;
     private Pet pet;
-    
+
     private List<Address> addresses = new ArrayList<Address>();
     private Map<Object, Address> namedAddresses = new HashMap<Object, Address>(0);
-    
+
 
     public Object object;
-    
+
     public Object notInEqualTestObject;
 
     public Person() {
 
     }
 
-    public Person(String name,
-                  int age) {
-        super();
+    public Person(String name, int age) {
         this.name = name;
         this.age = age;
+    }
+
+    public Person(String name, int age, boolean happy) {
+        this.name = name;
+        this.age = age;
+        this.happy = happy;
     }
 
     public Person(final String name) {
@@ -91,10 +98,10 @@ public class Person
     public List<Address> getAddresses() {
         return addresses;
     }
-    
+
     public List getAddressesNoGenerics() {
         return addresses;
-    }    
+    }
 
     public void setAddresses(List<Address> addresses) {
         this.addresses = addresses;
@@ -353,6 +360,6 @@ public class Person
 
     public void setObject(Object object) {
         this.object = object;
-    }    
+    }
 
 }

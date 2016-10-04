@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,6 +82,7 @@ public interface InternalKnowledgePackage extends KnowledgePackage, Externalizab
     void removeGlobal( String identifier );
 
     boolean removeObjectsGeneratedFromResource(Resource resource);
+    List<TypeDeclaration> removeTypesGeneratedFromResource(Resource resource);
     List<RuleImpl> removeRulesGeneratedFromResource(Resource resource);
     List<Function> removeFunctionsGeneratedFromResource(Resource resource);
     List<Process> removeProcessesGeneratedFromResource(Resource resource);
@@ -108,6 +109,4 @@ public interface InternalKnowledgePackage extends KnowledgePackage, Externalizab
 
     boolean hasTraitRegistry();
     TraitRegistry getTraitRegistry();
-
-    boolean isEvent( Class clazz );
 }

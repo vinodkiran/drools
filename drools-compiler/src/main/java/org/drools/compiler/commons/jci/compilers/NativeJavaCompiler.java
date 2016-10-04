@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ import java.io.Writer;
 import java.net.JarURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -88,7 +89,9 @@ public class NativeJavaCompiler extends AbstractJavaCompiler {
             units.add(new CompilationUnit(sourcePath, pReader));
         }
 
-        if (compiler.getTask(null, fileManager, diagnostics, null, null, units).call()) {
+        Iterable<String> options = new NativeJavaCompilerSettings(pSettings).toOptionsList();
+
+        if (compiler.getTask(null, fileManager, diagnostics, options, null, units).call()) {
             for (CompilationOutput compilationOutput : fileManager.getOutputs()) {
                 pStore.write(compilationOutput.getBinaryName().replace('.', '/') + ".class", compilationOutput.toByteArray());
             }
@@ -355,7 +358,12 @@ public class NativeJavaCompiler extends AbstractJavaCompiler {
                 jarUri = jarUri.substring(0, separator);
             }
 
-            JarURLConnection jarConn = (JarURLConnection) packageFolderURL.openConnection();
+            URLConnection urlConnection = packageFolderURL.openConnection();
+            if (!(urlConnection instanceof JarURLConnection)) {
+                return null;
+            }
+
+            JarURLConnection jarConn = (JarURLConnection) urlConnection;
             String rootEntryName = jarConn.getEntryName();
             int rootEnd = rootEntryName.length()+1;
 

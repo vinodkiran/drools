@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,16 +19,19 @@ package org.drools.core.common;
 import org.drools.core.time.JobHandle;
 import org.drools.core.time.TimerService;
 import org.drools.core.util.LinkedList;
-import org.kie.api.runtime.rule.EntryPoint;
 
 public class EventFactHandle extends DefaultFactHandle implements Comparable<EventFactHandle> {
 
     private static final long serialVersionUID = 510l;
 
+    static final String EVENT_FORMAT_VERSION = "5";
+
     private long              startTimestamp;
     private long              duration;
     private boolean           expired;
+    private boolean           pendingRemoveFromStore;
     private long              activationsCount;
+    private int               otnCount;
 
     private EventFactHandle   linkedFactHandle;
 
@@ -53,22 +56,22 @@ public class EventFactHandle extends DefaultFactHandle implements Comparable<Eve
      * @param timestamp the timestamp of the occurrence of this event
      * @param duration the duration of this event. May be 0 (zero) in case this is a primitive event.
      */
-    public EventFactHandle(final int id,
-                           final Object object,
-                           final long recency,
-                           final long timestamp,
-                           final long duration,
-                           final EntryPoint wmEntryPoint ) {
+    public EventFactHandle(int id,
+                           Object object,
+                           long recency,
+                           long timestamp,
+                           long duration,
+                           InternalWorkingMemoryEntryPoint wmEntryPoint ) {
         this( id, object, recency, timestamp, duration, wmEntryPoint, false );
     }
 
-    public EventFactHandle(final int id,
-                           final Object object,
-                           final long recency,
-                           final long timestamp,
-                           final long duration,
-                           final EntryPoint wmEntryPoint,
-                           final boolean isTraitOrTraitable ) {
+    public EventFactHandle(int id,
+                           Object object,
+                           long recency,
+                           long timestamp,
+                           long duration,
+                           InternalWorkingMemoryEntryPoint wmEntryPoint,
+                           boolean isTraitOrTraitable ) {
         super( id,
                object,
                recency,
@@ -78,8 +81,8 @@ public class EventFactHandle extends DefaultFactHandle implements Comparable<Eve
         this.duration = duration;
     }
 
-    public String toExternalForm() {
-        return  "5:" + super.getId() + ":" + getIdentityHashCode() + ":" + getObjectHashCode() + ":" + getRecency() + ":" + ( ((super.getEntryPoint() != null) ? super.getEntryPoint().getEntryPointId() : "null" ) + ":" + getObject() );
+    protected String getFormatVersion() {
+        return EVENT_FORMAT_VERSION;
     }
 
     /**
@@ -146,6 +149,22 @@ public class EventFactHandle extends DefaultFactHandle implements Comparable<Eve
         }
     }
 
+    public boolean isPendingRemoveFromStore() {
+        if ( linkedFactHandle != null ) {
+            return linkedFactHandle.isPendingRemoveFromStore();
+        }  else {
+            return pendingRemoveFromStore;
+        }
+    }
+
+    public void setPendingRemoveFromStore(boolean pendingRemove) {
+        if ( linkedFactHandle != null ) {
+            linkedFactHandle.setPendingRemoveFromStore(pendingRemove);
+        }  else {
+            this.pendingRemoveFromStore = pendingRemove;
+        }
+    }
+
     public long getActivationsCount() {
         if ( linkedFactHandle != null ) {
             return linkedFactHandle.getActivationsCount();
@@ -178,7 +197,23 @@ public class EventFactHandle extends DefaultFactHandle implements Comparable<Eve
             this.activationsCount--;
         }
     }
-    
+
+    public void increaseOtnCount() {
+        otnCount++;
+    }
+
+    public void decreaseOtnCount() {
+        otnCount--;
+    }
+
+    public int getOtnCount() {
+        return otnCount;
+    }
+
+    public void setOtnCount( int otnCount ) {
+        this.otnCount = otnCount;
+    }
+
     public EventFactHandle clone() {
         EventFactHandle clone = new EventFactHandle( getId(),
                                                       getObject(),
@@ -188,6 +223,7 @@ public class EventFactHandle extends DefaultFactHandle implements Comparable<Eve
                                                       getEntryPoint(),
                                                       isTraitOrTraitable() );
         clone.setActivationsCount( getActivationsCount() );
+        clone.setOtnCount( getOtnCount() );
         clone.setExpired( isExpired() );
         clone.setEntryPoint( getEntryPoint() );
         clone.setEqualityKey( getEqualityKey() );
@@ -208,6 +244,7 @@ public class EventFactHandle extends DefaultFactHandle implements Comparable<Eve
                                                      getEntryPoint(),
                                                      isTraitOrTraitable() );
         clone.setActivationsCount( getActivationsCount() );
+        clone.setOtnCount( getOtnCount() );
         clone.setExpired( isExpired() );
         clone.setEntryPoint( getEntryPoint() );
         clone.setEqualityKey( getEqualityKey() );

@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -960,7 +960,7 @@ public class StringUtils {
         int nestedParam = 0;
         boolean isQuoted = false;
         for (int i = 0; i < string.length(); i++) {
-            if (string.charAt(i) == ch) {
+            if (string.charAt( i ) == ch) {
                 if (!isQuoted && nestedParam == 0) {
                     args.add(string.subSequence(lastStart, i).toString().trim());
                     lastStart = i+1;
@@ -979,7 +979,9 @@ public class StringUtils {
                         break;
                     case '"':
                     case '\'':
-                        isQuoted = !isQuoted;
+                        if (i == 0 || string.charAt(i-1) != '\\') {
+                            isQuoted = !isQuoted;
+                        }
                         break;
                     case '\\':
                         if (i+1 < string.length() && string.charAt(i+1) == '"') {
@@ -1045,35 +1047,44 @@ public class StringUtils {
 
     public static int indexOfOutOfQuotes(String str, String searched) {
         for ( int i = str.indexOf(searched); i >= 0; i = str.indexOf(searched, i+1) ) {
-            if ( countCharOccurrences(str, '"', 0, i) % 2 == 0 ) {
+            if ( countQuoteOccurrences( str, 0, i ) % 2 == 0 ) {
                 return i;
             }
         }
         return -1;
     }
 
-    public static int indexOfOutOfQuotes(String str, char searched) {
-        for ( int i = str.indexOf(searched); i >= 0; i = str.indexOf(searched, i+1) ) {
-            if ( countCharOccurrences(str, '"', 0, i) % 2 == 0 ) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private static int countCharOccurrences(String s, char c, int start, int end) {
+    private static int countQuoteOccurrences(String str, int start, int end) {
         int count = 0;
         for (int i = start; i < end; i++) {
-            if (s.charAt(i) == c) {
+            if (str.charAt(i) == '"' && (i == 0 || str.charAt(i-1) != '\\')) {
                 count++;
             }
         }
         return count;
     }
 
+    public static int indexOfOutOfQuotes(String str, char searched) {
+        boolean isQuoted = false;
+        for (int i = 0; i < str.length(); i++) {
+            char ch = str.charAt( i );
+            if (ch == '"' && (i == 0 || str.charAt(i-1) != '\\')) {
+                isQuoted = !isQuoted;
+            } else if (ch == searched && !isQuoted) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     public static boolean isIdentifier(String expr) {
         return !expr.equals("true") && !expr.equals("false") &&
                !expr.equals("null") && expr.matches("[a-zA-Z_\\$][a-zA-Z_\\$0-9]*");
+    }
+
+    public static boolean isDereferencingIdentifier(String expr) {
+        return !expr.equals("true") && !expr.equals("false") &&
+               !expr.equals("null") && expr.matches("[a-zA-Z_\\$][a-zA-Z_\\$0-9\\.]*");
     }
 
     // To be extended in the future with more comparison strategies
@@ -1112,5 +1123,9 @@ public class StringUtils {
 
     public static boolean equalsIgnoreSpaces(String s1, String s2) {
         return s1.replaceAll( "\\s+", "" ).equals( s2.replaceAll( "\\s+", "" ) );
+    }
+
+    public static String uuid() {
+        return "x" + UUID.randomUUID().toString().replace( '-', 'x' );
     }
 }

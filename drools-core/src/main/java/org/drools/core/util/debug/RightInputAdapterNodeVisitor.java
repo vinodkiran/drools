@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ public class RightInputAdapterNodeVisitor extends AbstractNetworkNodeVisitor {
         RightInputAdapterNode an = (RightInputAdapterNode) node;
         DefaultNodeInfo ni = info.getNodeInfo( node );
 
-        BetaNode betaNode = (BetaNode) an.getSinkPropagator().getSinks()[0];
+        BetaNode betaNode = (BetaNode) an.getObjectSinkPropagator().getSinks()[0];
 
         Memory childMemory = info.getSession().getNodeMemory( betaNode );
 

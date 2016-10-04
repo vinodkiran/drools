@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,32 +20,18 @@ import org.kie.api.definition.type.PropertyReactive;
 
 @PropertyReactive
 public class Item extends Thing {
-    @Position(2)
-    private boolean fixed;
 
     public Item(String name) {
-        this( name, false);
+        this( name, true);
     }
 
-    public Item(String name, boolean fixed) {
-        super( name );
-        this.fixed = fixed;
+    public Item(String name, boolean portable) {
+        super( name, portable );
     }
 
-    public Item(long id, String name, boolean fixed) {
-        super(name );
-        this.fixed = fixed;
+    public Item(long id, String name, boolean portable) {
+        super(name, portable );
     }
-
-    public boolean isFixed() {
-        return fixed;
-    }
-
-    public void setFixed(boolean fixed) {
-        this.fixed = fixed;
-    }
-
-
 
     @Override
     public String toString() {

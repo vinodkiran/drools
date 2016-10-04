@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,8 +189,7 @@ public class SegmentPropagationTest {
                                .update( )
               .postStaged(smem0).insert( t(a0, b1),
                                          t(a1, b0) )
-                                .delete( t(a1, b2),
-                                         t(a0, b2) )
+                                .delete( )
                                 .update( )
               .postStaged( smem1 ).insert( t(a1, b0),
                                            t(a0, b1) )

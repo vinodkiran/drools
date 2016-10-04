@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,28 +18,64 @@ package org.kie.scanner.embedder;
 import org.apache.maven.settings.Settings;
 import org.apache.maven.settings.building.DefaultSettingsBuilderFactory;
 import org.apache.maven.settings.building.DefaultSettingsBuildingRequest;
+import org.apache.maven.settings.building.FileSettingsSource;
 import org.apache.maven.settings.building.SettingsBuilder;
 import org.apache.maven.settings.building.SettingsBuildingException;
+import org.apache.maven.settings.building.SettingsSource;
+import org.apache.maven.settings.building.StringSettingsSource;
+import org.apache.maven.settings.building.UrlSettingsSource;
+import org.kie.scanner.Aether;
+import org.kie.scanner.MavenRepository;
 import org.kie.scanner.MavenRepositoryConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
 
 public class MavenSettings {
 
     private static final Logger log = LoggerFactory.getLogger(MavenSettings.class);
 
-    private static final String CUSTOM_SETTINGS_PROPERTY = "kie.maven.settings.custom";
+    public static final String CUSTOM_SETTINGS_PROPERTY = "kie.maven.settings.custom";
 
     private static class SettingsHolder {
-        private static final File userSettingsFile = initUserSettingsFile();
-        private static final Settings settings = initSettings(userSettingsFile);
-        private static final MavenRepositoryConfiguration mavenConf = new MavenRepositoryConfiguration(settings);
+        private static SettingsSource userSettingsSource = initUserSettingsSource();
+        private static Settings settings = initSettings(userSettingsSource);
+        private static MavenRepositoryConfiguration mavenConf = new MavenRepositoryConfiguration(settings);
+
+        private static void reinitSettings() {
+            userSettingsSource = initUserSettingsSource();
+            internalInit();
+        }
+
+        private static void reinitSettingsFromString(String settings) {
+            userSettingsSource = new StringSettingsSource( settings );
+            internalInit();
+        }
+
+        private static void internalInit() {
+            settings = initSettings(userSettingsSource);
+            mavenConf = new MavenRepositoryConfiguration( settings);
+            Aether.instance = null;
+            MavenProjectLoader.mavenProject = null;
+            MavenRepository.defaultMavenRepository = null;
+        }
     }
 
-    public static File getUserSettingsFile() {
-        return SettingsHolder.userSettingsFile;
+    // USE ONLY FOR TESTING PURPOSES
+    public static void reinitSettings() {
+        SettingsHolder.reinitSettings();
+    }
+
+    // USE ONLY FOR TESTING PURPOSES
+    public static void reinitSettingsFromString(String settings) {
+        SettingsHolder.reinitSettingsFromString(settings);
+    }
+
+    public static SettingsSource getUserSettingsSource() {
+        return SettingsHolder.userSettingsSource;
     }
 
     public static Settings getSettings() {
@@ -50,12 +86,12 @@ public class MavenSettings {
         return SettingsHolder.mavenConf;
     }
 
-    private static Settings initSettings(File userSettingsFile) {
+    private static Settings initSettings(SettingsSource userSettingsSource) {
         SettingsBuilder settingsBuilder = new DefaultSettingsBuilderFactory().newInstance();
         DefaultSettingsBuildingRequest request = new DefaultSettingsBuildingRequest();
 
-        if (userSettingsFile != null) {
-            request.setUserSettingsFile( userSettingsFile );
+        if (userSettingsSource != null) {
+            request.setUserSettingsSource( userSettingsSource );
         }
 
         String mavenHome = System.getenv( "M2_HOME" );
@@ -89,14 +125,19 @@ public class MavenSettings {
         return settings;
     }
 
-    private static File initUserSettingsFile() {
+    private static SettingsSource initUserSettingsSource() {
         String customSettings = System.getProperty( CUSTOM_SETTINGS_PROPERTY );
         if (customSettings != null) {
             File customSettingsFile = new File( customSettings );
             if (customSettingsFile.exists()) {
-                return customSettingsFile;
+                return new FileSettingsSource( customSettingsFile );
             } else {
-                log.warn("Cannot find custom maven settings file: " + customSettings);
+                try {
+                    return new UrlSettingsSource( new URL( customSettings ) );
+                } catch (MalformedURLException e) {
+                    // Ignore
+                }
+                log.warn("Cannot find custom maven settings: " + customSettings);
             }
         }
 
@@ -104,7 +145,7 @@ public class MavenSettings {
         if (userHome != null) {
             File userSettingsFile = new File( userHome + "/.m2/settings.xml" );
             if (userSettingsFile.exists()) {
-                return userSettingsFile;
+                return new FileSettingsSource( userSettingsFile );
             }
         } else {
             log.warn("User home is not set");

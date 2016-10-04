@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,24 +20,24 @@ import org.apache.maven.settings.building.DefaultSettingsBuilderFactory;
 import org.apache.maven.settings.building.DefaultSettingsBuildingRequest;
 import org.apache.maven.settings.building.SettingsBuilder;
 import org.apache.maven.settings.building.SettingsBuildingException;
-import org.junit.Test;
 import org.eclipse.aether.repository.RemoteRepository;
+import org.junit.Test;
 
 import java.io.File;
 import java.util.Collection;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-public class MavenRepositoryTest {
+public class MavenRepositoryTest extends AbstractKieCiTest {
 
     @Test
     public void testMirrors() {
         MavenRepository repo = new MavenRepositoryMock(Aether.getAether());
         Collection<RemoteRepository> remoteRepos = repo.getRemoteRepositoriesForRequest();
-        assertEquals(3, remoteRepos.size());
+        assertEquals(2, remoteRepos.size());
         for (RemoteRepository remoteRepo : remoteRepos) {
-            assertTrue(remoteRepo.getId().equals("local") ||
-                       remoteRepo.getId().equals("qa") ||
+            assertTrue(remoteRepo.getId().equals("qa") ||
                        remoteRepo.getId().equals("foo"));
         }
     }

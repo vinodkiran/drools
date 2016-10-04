@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,8 @@ public class PropagationQueuingNode extends ObjectSource
                context.getKnowledgeBase().getConfiguration().getAlphaNodeHashingThreshold() );
         this.action = new PropagateAction( this );
         initDeclaredMask(context);
+
+        hashcode = calculateHashCode();
     }
     
     @Override
@@ -178,16 +180,14 @@ public class PropagationQueuingNode extends ObjectSource
             BetaNode betaNode = (BetaNode) s;
             RightTuple rightTuple = modifyPreviousTuples.peekRightTuple();
             while ( rightTuple != null &&
-                    rightTuple.getRightTupleSink().getRightInputOtnId().before( betaNode.getRightInputOtnId() ) ) {
+                    rightTuple.getInputOtnId().before( betaNode.getRightInputOtnId() ) ) {
                 modifyPreviousTuples.removeRightTuple();
                 // we skipped this node, due to alpha hashing, so retract now
-                rightTuple.getRightTupleSink().retractRightTuple( rightTuple,
-                                                                  context,
-                                                                  workingMemory );
+                rightTuple.retractTuple( context, workingMemory );
                 rightTuple = modifyPreviousTuples.peekRightTuple();
             }
 
-            if ( rightTuple != null && rightTuple.getRightTupleSink().getRightInputOtnId().equals( betaNode.getRightInputOtnId() ) ) {
+            if ( rightTuple != null && rightTuple.getInputOtnId().equals( betaNode.getRightInputOtnId() ) ) {
                 modifyPreviousTuples.removeRightTuple();
                 rightTuple.reAdd();
                 if ( context.getModificationMask().intersects( betaNode.getRightInferredMask() ) ) {
@@ -261,30 +261,23 @@ public class PropagationQueuingNode extends ObjectSource
         return new PropagationQueueingNodeMemory();
     }
     
-    public int hashCode() {
+    public int calculateHashCode() {
         return this.source.hashCode();
     }
 
-    /*
-     * (non-Javadoc)
-     *
-     * @see java.lang.Object#equals(java.lang.Object)
-     */
+    @Override
     public boolean equals(final Object object) {
-        if ( this == object ) {
-            return true;
-        }
-
-        if ( object == null || !(object instanceof PropagationQueuingNode) ) {
-            return false;
-        }
-
-        final PropagationQueuingNode other = (PropagationQueuingNode) object;
-
-        return this.source.equals( other.source );
+        return this == object ||
+               ( internalEquals( object ) && this.source.thisNodeEquals( ((PropagationQueuingNode)object).source ) );
     }
 
-    
+    @Override
+    protected boolean internalEquals( Object object ) {
+        if ( object == null || !(object instanceof PropagationQueuingNode) || this.hashCode() != object.hashCode() ) {
+            return false;
+        }
+        return true;
+    }
 
     /**
      * Memory implementation for the node
@@ -462,17 +455,13 @@ public class PropagationQueuingNode extends ObjectSource
         public void execute( final ObjectSinkPropagator sink,
                              final InternalWorkingMemory workingMemory ) {
 
-            for ( RightTuple rightTuple = this.handle.getFirstRightTuple(); rightTuple != null; rightTuple = rightTuple.getHandleNext() ) {
-                rightTuple.getRightTupleSink().retractRightTuple( rightTuple,
-                                                                  context,
-                                                                  workingMemory );
+            for ( RightTuple rightTuple = (RightTuple) this.handle.getFirstRightTuple(); rightTuple != null; rightTuple = rightTuple.getHandleNext() ) {
+                rightTuple.retractTuple( context, workingMemory );
             }
             this.handle.clearRightTuples();
 
-            for ( LeftTuple leftTuple = this.handle.getLastLeftTuple(); leftTuple != null; leftTuple = leftTuple.getLeftParentNext() ) {
-                leftTuple.getLeftTupleSink().retractLeftTuple( leftTuple,
-                                                               context,
-                                                               workingMemory );
+            for ( LeftTuple leftTuple = (LeftTuple) this.handle.getFirstLeftTuple(); leftTuple != null; leftTuple = leftTuple.getHandleNext() ) {
+                leftTuple.retractTuple(  context, workingMemory );
             }
             this.handle.clearLeftTuples();
             context.evaluateActionQueue( workingMemory );

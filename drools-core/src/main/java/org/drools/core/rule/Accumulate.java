@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ public abstract class Accumulate extends ConditionalElement
 
         this.source = source;
         this.requiredDeclarations = requiredDeclarations;
+        initInnerDeclarationCache();
     }
 
     @SuppressWarnings("unchecked")
@@ -61,6 +62,7 @@ public abstract class Accumulate extends ConditionalElement
         source = (RuleConditionElement) in.readObject();
         requiredDeclarations = (Declaration[]) in.readObject();
         this.cloned = (List<Accumulate>) in.readObject();
+        initInnerDeclarationCache();
     }
 
     public void writeExternal(ObjectOutput out) throws IOException {
@@ -165,17 +167,14 @@ public abstract class Accumulate extends ConditionalElement
     protected abstract void replaceAccumulatorDeclaration(Declaration declaration,
                                                           Declaration resolved);
     
-    public void resetInnerDeclarationCache() {
-        this.innerDeclarationCache = null;
-    }
-    
     protected Declaration[] getInnerDeclarationCache() {
-        if( this.innerDeclarationCache == null ) {
-            Map<String, Declaration> innerDeclarations = this.source.getInnerDeclarations();
-            this.innerDeclarationCache = innerDeclarations.values().toArray( new Declaration[innerDeclarations.size()] );
-            Arrays.sort( this.innerDeclarationCache, RuleTerminalNode.SortDeclarations.instance );
-        }
         return this.innerDeclarationCache;
+    }
+
+    private void initInnerDeclarationCache() {
+        Map<String, Declaration> innerDeclarations = this.source.getInnerDeclarations();
+        this.innerDeclarationCache = innerDeclarations.values().toArray( new Declaration[innerDeclarations.size()] );
+        Arrays.sort( this.innerDeclarationCache, RuleTerminalNode.SortDeclarations.instance );
     }
 
     public Declaration[] getRequiredDeclarations() {
@@ -184,5 +183,10 @@ public abstract class Accumulate extends ConditionalElement
 
     public boolean hasRequiredDeclarations() {
         return requiredDeclarations != null && requiredDeclarations.length > 0;
+    }
+
+    @Override
+    public boolean requiresLeftActivation() {
+        return true;
     }
 }

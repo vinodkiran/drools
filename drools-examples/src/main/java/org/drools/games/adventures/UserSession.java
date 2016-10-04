@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,18 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.drools.games.adventures.model.Character;
 
+import org.kie.api.definition.type.Position;
+import org.kie.api.definition.type.PropertyReactive;
 import org.kie.api.runtime.Channel;
 
 public class UserSession {
+    @Position(0)
     private int                  id;
+
+    @Position(1)
     private Map<String, Channel> channels;
+
+    @Position(2)
     private Character            character;
 
     private static AtomicInteger counter = new AtomicInteger();

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,11 @@ import org.drools.core.base.DroolsQuery;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalWorkingMemory;
 import org.drools.core.phreak.ReactiveObject;
-import org.drools.core.reteoo.LeftTuple;
 import org.drools.core.rule.ContextEntry;
 import org.drools.core.rule.Declaration;
 import org.drools.core.rule.From;
 import org.drools.core.rule.MutableTypeConstraint;
+import org.drools.core.spi.AcceptsClassObjectType;
 import org.drools.core.spi.AlphaNodeFieldConstraint;
 import org.drools.core.spi.BetaNodeFieldConstraint;
 import org.drools.core.spi.Constraint;
@@ -32,6 +32,8 @@ import org.drools.core.spi.DataProvider;
 import org.drools.core.spi.InternalReadAccessor;
 import org.drools.core.spi.PatternExtractor;
 import org.drools.core.spi.PropagationContext;
+import org.drools.core.spi.Tuple;
+import org.drools.core.util.ClassUtils;
 
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -40,12 +42,14 @@ import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
-import static org.drools.core.util.ClassUtils.getAccessor;
+import static org.drools.core.util.ClassUtils.areNullSafeEquals;
+import static org.drools.core.util.ClassUtils.convertFromPrimitiveType;
 
 public class XpathConstraint extends MutableTypeConstraint {
 
@@ -60,15 +64,19 @@ public class XpathConstraint extends MutableTypeConstraint {
 
     private XpathConstraint(LinkedList<XpathChunk> chunks) {
         this.chunks = chunks;
-        setType(ConstraintType.XPATH);
     }
 
-    public XpathChunk addChunck(Class<?> clazz, String field, int index, boolean iterate) {
-        XpathChunk chunk = XpathChunk.get(clazz, field, index, iterate);
+    public XpathChunk addChunck(Class<?> clazz, String field, int index, boolean iterate, boolean lazy) {
+        XpathChunk chunk = XpathChunk.get(clazz, field, index, iterate, lazy);
         if (chunk != null) {
             chunks.add(chunk);
         }
         return chunk;
+    }
+
+    @Override
+    public ConstraintType getType() {
+        return ConstraintType.XPATH;
     }
 
     @Override
@@ -103,25 +111,21 @@ public class XpathConstraint extends MutableTypeConstraint {
     @Override
     public boolean isAllowedCachedLeft(ContextEntry context, InternalFactHandle handle) {
         throw new UnsupportedOperationException();
-
     }
 
     @Override
-    public boolean isAllowedCachedRight(LeftTuple tuple, ContextEntry context) {
+    public boolean isAllowedCachedRight(Tuple tuple, ContextEntry context) {
         throw new UnsupportedOperationException();
-
     }
 
     @Override
     public ContextEntry createContextEntry() {
         throw new UnsupportedOperationException();
-
     }
 
     @Override
-    public boolean isAllowed(InternalFactHandle handle, InternalWorkingMemory workingMemory, ContextEntry context) {
+    public boolean isAllowed(InternalFactHandle handle, InternalWorkingMemory workingMemory) {
         throw new UnsupportedOperationException();
-
     }
 
     @Override
@@ -165,7 +169,12 @@ public class XpathConstraint extends MutableTypeConstraint {
     }
 
     private interface XpathEvaluator {
-        Iterable<?> evaluate(InternalWorkingMemory workingMemory, LeftTuple leftTuple, Object object);
+        Iterable<?> evaluate(InternalWorkingMemory workingMemory, Tuple leftTuple, Object object);
+    }
+
+    @Override
+    public String toString() {
+        return chunks.toString();
     }
 
     private static class SingleChunkXpathEvaluator implements XpathEvaluator {
@@ -175,18 +184,18 @@ public class XpathConstraint extends MutableTypeConstraint {
             this.chunk = chunk;
         }
 
-        public Iterable<?> evaluate(InternalWorkingMemory workingMemory, LeftTuple leftTuple, Object object) {
+        public Iterable<?> evaluate(InternalWorkingMemory workingMemory, Tuple leftTuple, Object object) {
             return evaluateObject(workingMemory, leftTuple, chunk, new ArrayList<Object>(), object);
         }
 
-        private List<Object> evaluateObject(InternalWorkingMemory workingMemory, LeftTuple leftTuple, XpathChunk chunk, List<Object> list, Object object) {
+        private List<Object> evaluateObject(InternalWorkingMemory workingMemory, Tuple leftTuple, XpathChunk chunk, List<Object> list, Object object) {
             Object result = chunk.evaluate(object);
-            if (result instanceof ReactiveObject) {
+            if (!chunk.lazy && result instanceof ReactiveObject) {
                 ((ReactiveObject) result).addLeftTuple(leftTuple);
             }
             if (chunk.iterate && result instanceof Iterable) {
                 for (Object value : (Iterable<?>) result) {
-                    if (value instanceof ReactiveObject) {
+                    if (!chunk.lazy && value instanceof ReactiveObject) {
                         ((ReactiveObject) value).addLeftTuple(leftTuple);
                     }
                     if (value != null) {
@@ -198,31 +207,71 @@ public class XpathConstraint extends MutableTypeConstraint {
             }
             return list;
         }
+
+        @Override
+        public String toString() {
+            return chunk.toString();
+        }
+
+        @Override
+        public boolean equals( Object obj ) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || !(obj instanceof SingleChunkXpathEvaluator)) {
+                return false;
+            }
+
+            SingleChunkXpathEvaluator other = (SingleChunkXpathEvaluator) obj;
+
+            return chunk.equals( other.chunk );
+        }
+
+        @Override
+        public int hashCode() {
+            return chunk.hashCode();
+        }
     }
 
-    public static class XpathChunk {
-        
-        private final Class<?> clazz;
+    public static class XpathChunk implements AcceptsClassObjectType {
+
         private final String field;
         private final int index;
         private final boolean iterate;
-        private final Method accessor;
+        private final boolean lazy;
+        private final boolean array;
+
         private List<Constraint> constraints;
         private Declaration declaration;
-        private Class<?> returnedClass;
+        private ClassObjectType classObjectType;
+        private ClassObjectType returnedType;
+        private Method accessor;
 
-        private XpathChunk(Class<?> clazz, String field, int index, boolean iterate, Method accessor) {
-            this.clazz = clazz;
+        private XpathChunk(String field, int index, boolean iterate, boolean lazy, boolean array) {
             this.field = field;
             this.index = index;
             this.iterate = iterate;
-            this.accessor = accessor;
-            this.accessor.setAccessible(true);
+            this.lazy = lazy;
+            this.array = array;
+        }
 
-            Class<?> lastReturnedClass = accessor.getReturnType();
-            this.returnedClass = iterate && Iterable.class.isAssignableFrom(lastReturnedClass) ?
-                                 getParametricType() :
-                                 lastReturnedClass;
+        private static XpathChunk get(Class<?> clazz, String field, int index, boolean iterate, boolean lazy) {
+            Method accessor = ClassUtils.getAccessor( clazz, field );
+            if (accessor == null) {
+                return null;
+            }
+            return new XpathChunk(accessor.getName(), index, iterate, lazy, iterate && accessor.getReturnType().isArray());
+        }
+
+        private Method getAccessor() {
+            if (accessor == null) {
+                try {
+                    accessor = classObjectType.getClassType().getMethod( field );
+                } catch (NoSuchMethodException e) {
+                    throw new RuntimeException( e );
+                }
+            }
+            return accessor;
         }
 
         public void addConstraint(Constraint constraint) {
@@ -247,11 +296,14 @@ public class XpathConstraint extends MutableTypeConstraint {
             constraint.setType(type);
         }
 
-        public <T> T evaluate(Object obj) {
+        public Object evaluate(Object obj) {
             try {
-                T result = (T) accessor.invoke(obj);
+                Object result = getAccessor().invoke( obj );
+                if (array) {
+                    result = Arrays.asList( (Object[]) result );
+                }
                 if (index >= 0) {
-                    result = (T) ((List)result).subList( index, index+1 );
+                    result = ((List)result).subList( index, index+1 );
                 }
                 return result;
             } catch (Exception e) {
@@ -259,23 +311,34 @@ public class XpathConstraint extends MutableTypeConstraint {
             }
         }
 
-        private static XpathChunk get(Class<?> clazz, String field, int index, boolean iterate) {
-            Method accessor = getAccessor(clazz, field);
-            if (accessor == null) {
-                return null;
-            }
-            return new XpathChunk(clazz, field, index, iterate, accessor);
-        }
-
         public Class<?> getReturnedClass() {
-            return returnedClass;
+            if (returnedType != null) {
+                return returnedType.getClassType();
+            }
+            try {
+                Method accessor = classObjectType.getClassType().getMethod( field );
+                return convertFromPrimitiveType( iterate ? getItemClass(accessor) : accessor.getReturnType() );
+            } catch (NoSuchMethodException e) {
+                throw new RuntimeException( e );
+            }
         }
 
-        public void setReturnedClass( Class<?> returnedClass ) {
-            this.returnedClass = returnedClass;
+        public void setReturnedType( ClassObjectType returnedType ) {
+            this.returnedType = returnedType;
         }
 
-        public Class<?> getParametricType() {
+        private Class<?> getItemClass(Method accessor) {
+            Class<?> lastReturnedClass = accessor.getReturnType();
+            if (Iterable.class.isAssignableFrom(lastReturnedClass)) {
+                return getParametricType(accessor);
+            }
+            if (lastReturnedClass.isArray()) {
+                return lastReturnedClass.getComponentType();
+            }
+            return lastReturnedClass;
+        }
+
+        private Class<?> getParametricType(Method accessor) {
             Type returnedType = accessor.getGenericReturnType();
             if (returnedType instanceof ParameterizedType) {
                 Type[] parametricType = ((ParameterizedType) returnedType).getActualTypeArguments();
@@ -294,35 +357,34 @@ public class XpathConstraint extends MutableTypeConstraint {
             return from;
         }
 
-        public List<BetaNodeFieldConstraint> getBetaConstraints() {
-            if (constraints == null) {
-                return Collections.emptyList();
-            }
-            List<BetaNodeFieldConstraint> betaConstraints = new ArrayList<BetaNodeFieldConstraint>();
-            for (Constraint constraint : constraints) {
-                if (constraint.getType() == ConstraintType.BETA) {
-                    betaConstraints.add(((BetaNodeFieldConstraint) constraint));
-                }
-            }
-            return betaConstraints;
+        public List<AlphaNodeFieldConstraint> getAlphaConstraints() {
+            return getConstraintsByType(ConstraintType.ALPHA);
         }
 
-        public List<AlphaNodeFieldConstraint> getAlphaConstraints() {
+        public List<BetaNodeFieldConstraint> getBetaConstraints() {
+            return getConstraintsByType(ConstraintType.BETA);
+        }
+
+        public List<XpathConstraint> getXpathConstraints() {
+            return getConstraintsByType(ConstraintType.XPATH);
+        }
+
+        private <T> List<T> getConstraintsByType(ConstraintType constraintType) {
             if (constraints == null) {
                 return Collections.emptyList();
             }
-            List<AlphaNodeFieldConstraint> alphaConstraints = new ArrayList<AlphaNodeFieldConstraint>();
+            List<T> typedConstraints = new ArrayList<T>();
             for (Constraint constraint : constraints) {
-                if (constraint.getType() == ConstraintType.ALPHA) {
-                    alphaConstraints.add(((AlphaNodeFieldConstraint) constraint));
+                if (constraint.getType() == constraintType) {
+                    typedConstraints.add( (T) constraint );
                 }
             }
-            return alphaConstraints;
+            return typedConstraints;
         }
 
         @Override
         public String toString() {
-            StringBuilder sb = new StringBuilder( clazz.getSimpleName() );
+            StringBuilder sb = new StringBuilder( (lazy ? "?" : "") + classObjectType.getClassType().getSimpleName() );
             if (iterate) {
                 sb.append( "/" );
             } else {
@@ -341,6 +403,48 @@ public class XpathConstraint extends MutableTypeConstraint {
                 sb.append( "}" );
             }
             return sb.toString();
+        }
+
+        @Override
+        public void setClassObjectType( ClassObjectType classObjectType ) {
+            this.classObjectType = classObjectType;
+        }
+
+        @Override
+        public boolean equals( Object obj ) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || !(obj instanceof XpathChunk)) {
+                return false;
+            }
+
+            XpathChunk other = (XpathChunk) obj;
+
+            return field.equals( other.field ) &&
+                   index == other.index &&
+                   iterate == other.iterate &&
+                   lazy == other.lazy &&
+                   array == other.array &&
+                   areNullSafeEquals(declaration, other.declaration);
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 23 * field.hashCode() + 29 * index;
+            if (declaration != null) {
+                hash += 31 * declaration.hashCode();
+            }
+            if (iterate) {
+                hash += 37;
+            }
+            if (lazy) {
+                hash += 41;
+            }
+            if (array) {
+                hash += 43;
+            }
+            return hash;
         }
     }
 
@@ -365,8 +469,8 @@ public class XpathConstraint extends MutableTypeConstraint {
         }
 
         @Override
-        public Iterator getResults(LeftTuple leftTuple, InternalWorkingMemory wm, PropagationContext ctx, Object providerContext) {
-            InternalFactHandle fh = leftTuple.getHandle();
+        public Iterator getResults(Tuple leftTuple, InternalWorkingMemory wm, PropagationContext ctx, Object providerContext) {
+            InternalFactHandle fh = leftTuple.getFactHandle();
             Object obj = fh.getObject();
 
             if (obj instanceof DroolsQuery) {
@@ -384,6 +488,35 @@ public class XpathConstraint extends MutableTypeConstraint {
         @Override
         public void replaceDeclaration(Declaration declaration, Declaration resolved) {
             throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public String toString() {
+            return xpathEvaluator.toString();
+        }
+
+        @Override
+        public boolean equals( Object obj ) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || !(obj instanceof XpathChunk)) {
+                return false;
+            }
+
+            XpathDataProvider other = (XpathDataProvider) obj;
+
+            return xpathEvaluator.equals( other.xpathEvaluator ) &&
+                   areNullSafeEquals(declaration, other.declaration);
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 31 * xpathEvaluator.hashCode();
+            if (declaration != null) {
+                hash += 37 * declaration.hashCode();
+            }
+            return hash;
         }
     }
 }

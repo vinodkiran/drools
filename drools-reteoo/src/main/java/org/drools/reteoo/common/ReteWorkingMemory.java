@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import org.drools.core.common.InternalAgenda;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalWorkingMemory;
 import org.drools.core.common.WorkingMemoryAction;
+import org.drools.core.definitions.rule.impl.RuleImpl;
 import org.drools.core.event.AgendaEventSupport;
 import org.drools.core.event.RuleEventListenerSupport;
 import org.drools.core.event.RuleRuntimeEventSupport;
@@ -30,10 +31,15 @@ import org.drools.core.impl.InternalKnowledgeBase;
 import org.drools.core.impl.StatefulKnowledgeSessionImpl;
 import org.drools.core.phreak.PropagationEntry;
 import org.drools.core.reteoo.LIANodePropagation;
+import org.drools.core.reteoo.ObjectTypeConf;
+import org.drools.core.runtime.impl.ExecutionResultImpl;
+import org.drools.core.spi.Activation;
 import org.drools.core.spi.FactHandleFactory;
 import org.drools.core.spi.PropagationContext;
+import org.drools.core.util.bitmask.BitMask;
 import org.kie.api.runtime.Environment;
 import org.kie.api.runtime.rule.AgendaFilter;
+import org.kie.api.runtime.rule.FactHandle;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -50,6 +56,9 @@ public class ReteWorkingMemory extends StatefulKnowledgeSessionImpl {
     private Queue<WorkingMemoryAction> actionQueue;
 
     private AtomicBoolean evaluatingActionQueue = new AtomicBoolean(false);
+
+    /** Flag to determine if a rule is currently being fired. */
+    private volatile AtomicBoolean firing = new AtomicBoolean(false);
 
     public ReteWorkingMemory() {
     }
@@ -102,7 +111,7 @@ public class ReteWorkingMemory extends StatefulKnowledgeSessionImpl {
         liaPropagations.add( liaNodePropagation );
     }
 
-    private final Integer syncLock = 42;
+    private final Object syncLock = new Object();
     public void initInitialFact() {
         if ( initialFactHandle == null ) {
             synchronized ( syncLock ) {
@@ -194,7 +203,7 @@ public class ReteWorkingMemory extends StatefulKnowledgeSessionImpl {
     }
 
     @Override
-    protected BaseNode[] evalQuery(String queryName, DroolsQuery queryObject, InternalFactHandle handle, PropagationContext pCtx) {
+    protected BaseNode[] evalQuery(final String queryName, final DroolsQuery queryObject, final InternalFactHandle handle, final PropagationContext pCtx, final boolean isCalledFromRHS) {
         initInitialFact();
 
         BaseNode[] tnodes = kBase.getReteooBuilder().getTerminalNodesForQuery( queryName );
@@ -216,7 +225,7 @@ public class ReteWorkingMemory extends StatefulKnowledgeSessionImpl {
         try {
             startOperation();
             actionQueue.add(action);
-            notifyHalt();
+            notifyWaitOnRest();
         } finally {
             endOperation();
         }
@@ -262,5 +271,84 @@ public class ReteWorkingMemory extends StatefulKnowledgeSessionImpl {
     @Override
     public Iterator<? extends PropagationEntry> getActionsIterator() {
         return actionQueue.iterator();
+    }
+
+    @Override
+    public FactHandle insert( final Object object,
+                              final Object tmsValue,
+                              final boolean dynamic,
+                              boolean logical,
+                              final RuleImpl rule,
+                              final Activation activation ) {
+        try {
+            kBase.readLock();
+            return super.insert( object, tmsValue, dynamic, logical, rule, activation );
+        } finally {
+            kBase.readUnlock();
+        }
+    }
+
+    @Override
+    public void insert(final InternalFactHandle handle,
+                       final Object object,
+                       final RuleImpl rule,
+                       final Activation activation,
+                       ObjectTypeConf typeConf ) {
+        try {
+            kBase.readLock();
+            super.insert( handle, object, rule, activation, typeConf );
+        } finally {
+            kBase.readUnlock();
+        }
+    }
+
+    @Override
+    public void delete(FactHandle factHandle,
+                       RuleImpl rule,
+                       Activation activation,
+                       FactHandle.State fhState ) {
+        try {
+            kBase.readLock();
+            super.delete( factHandle, rule, activation, fhState );
+        } finally {
+            kBase.readUnlock();
+        }
+    }
+
+    @Override
+    public void update(FactHandle factHandle,
+                       final Object object,
+                       final BitMask mask,
+                       Class<?> modifiedClass,
+                       final Activation activation) {
+        try {
+            kBase.readLock();
+            super.update( factHandle, object, mask, modifiedClass, activation );
+        } finally {
+            kBase.readUnlock();
+        }
+    }
+
+    @Override
+    public void startBatchExecution(ExecutionResultImpl results ) {
+        kBase.readLock();
+        super.startBatchExecution( results );
+    }
+
+    @Override
+    public void endBatchExecution() {
+        super.endBatchExecution();
+        kBase.readUnlock();
+    }
+
+    @Override
+    public void activate() { }
+
+    @Override
+    public void deactivate() { }
+
+    @Override
+    public boolean tryDeactivate() {
+        return true;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008 JBoss Inc
+ * Copyright 2008 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ abstract public class BaseClassFieldWriter
         try {
             final ClassFieldInspector inspector = new ClassFieldInspector( clazz );
             this.index = inspector.getFieldNames().get( fieldName );
-            this.fieldType = inspector.getFieldTypes().get( fieldName );
+            this.fieldType = inspector.getFieldType( fieldName );
             this.valueType = ValueType.determineValueType( this.fieldType );
         } catch ( final Exception e ) {
             throw new RuntimeException( e );

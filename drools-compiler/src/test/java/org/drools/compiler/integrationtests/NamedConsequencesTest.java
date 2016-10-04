@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -876,5 +876,84 @@ public class NamedConsequencesTest extends CommonTestMethodBase {
         kSession.fireAllRules();
 
         assertEquals(2, counter.get());
+    }
+
+    @Test
+    public void testDeleteWithBreakingBranch() throws Exception {
+        // DROOLS-1068
+        String drl =
+                "global java.util.List list;\n" +
+                "rule R when\n" +
+                "  Integer()\n" +
+                "  if (true) break[branch]\n" +
+                "  not Integer()\n" +
+                "then\n" +
+                "  list.add(\"main\");\n" +
+                "then[branch]\n" +
+                "  list.add(\"branch\");\n" +
+                "end\n";
+
+        KieSession ksession = new KieHelper().addContent( drl, ResourceType.DRL )
+                                             .build()
+                                             .newKieSession();
+
+        List<String> list = new ArrayList<String>();
+        ksession.setGlobal( "list", list );
+
+        FactHandle fh = ksession.insert(1);
+        ksession.fireAllRules();
+        ksession.delete(fh);
+        ksession.fireAllRules();
+
+        assertEquals( 1, list.size() );
+        assertEquals( "branch", list.get( 0 ) );
+    }
+
+    @Test
+    public void testQueryWithBreakingBranch() throws Exception {
+        // DROOLS-1115
+        String drl =
+                "import " + ListHolder.class.getCanonicalName() + ";\n" +
+                "query q(ListHolder $listHolder)\n" +
+                "    $listHolder := ListHolder()\n" +
+                "    $i : Integer()\n" +
+                "end\n" +
+                "\n" +
+                "rule R when\n" +
+                "    q($listHolder;)\n" +
+                "    $s : String() from $listHolder.list\n" +
+                "    if (1==2) break[branch]\n" +
+                "then\n" +
+                "    $listHolder.getList().add(\"ok\");\n" +
+                "then[branch]\n" +
+                "    $listHolder.getList().add(\"ko\");\n" +
+                "end\n" +
+                "\n" +
+                "rule Init when then insert(1); end\n";
+
+        KieSession ksession = new KieHelper().addContent( drl, ResourceType.DRL )
+                                             .build()
+                                             .newKieSession();
+
+        List<String> list = new ArrayList<String>();
+        list.add("test");
+
+        ksession.insert( new ListHolder(list) );
+
+        ksession.fireAllRules();
+
+        assertEquals( "ok", list.get(1) );
+    }
+
+    public static class ListHolder {
+        private final List<String> list;
+
+        public ListHolder( List<String> list ) {
+            this.list = list;
+        }
+
+        public List<String> getList() {
+            return list;
+        }
     }
 }

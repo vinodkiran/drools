@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,6 @@ import org.drools.core.spi.Evaluator;
 import org.drools.core.spi.FieldValue;
 import org.drools.core.spi.InternalReadAccessor;
 
-import java.beans.IntrospectionException;
 import java.util.HashSet;
 import java.util.List;
 
@@ -75,7 +74,7 @@ public class ReteTesterHelper {
     public BetaNodeFieldConstraint getBoundVariableConstraint(final Class clazz,
                                                               final String fieldName,
                                                               final Declaration declaration,
-                                                              final String evaluatorString) throws IntrospectionException {
+                                                              final String evaluatorString) {
 
         final InternalReadAccessor extractor = store.getReader( clazz,
                                                                 fieldName );
@@ -86,7 +85,7 @@ public class ReteTesterHelper {
     public AlphaNodeFieldConstraint getLiteralConstraint(final Pattern pattern,
                                                          final String fieldName,
                                                          final String evaluatorString,
-                                                         final String value ) throws IntrospectionException {
+                                                         final String value ) {
         final Class< ? > clazz = ((ClassObjectType) pattern.getObjectType()).getClassType();
 
         final InternalReadAccessor extractor = store.getReader( clazz,

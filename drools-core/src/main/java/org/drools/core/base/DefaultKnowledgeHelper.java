@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,19 @@
 
 package org.drools.core.base;
 
-import org.drools.core.beliefsystem.BeliefSystem;
-import org.drools.core.beliefsystem.ModedAssertion;
-import org.drools.core.beliefsystem.simple.SimpleMode;
-import org.drools.core.rule.EntryPointId;
-import org.kie.api.runtime.rule.FactHandle;
+import org.drools.core.QueryResultsImpl;
 import org.drools.core.WorkingMemory;
 import org.drools.core.beliefsystem.BeliefSet;
+import org.drools.core.beliefsystem.BeliefSystem;
+import org.drools.core.beliefsystem.ModedAssertion;
 import org.drools.core.beliefsystem.simple.SimpleLogicalDependency;
+import org.drools.core.beliefsystem.simple.SimpleMode;
 import org.drools.core.common.AgendaItem;
 import org.drools.core.common.EqualityKey;
+import org.drools.core.common.EventSupport;
 import org.drools.core.common.InternalAgenda;
 import org.drools.core.common.InternalFactHandle;
+import org.drools.core.common.InternalKnowledgeRuntime;
 import org.drools.core.common.InternalRuleFlowGroup;
 import org.drools.core.common.InternalWorkingMemoryActions;
 import org.drools.core.common.InternalWorkingMemoryEntryPoint;
@@ -38,27 +39,36 @@ import org.drools.core.definitions.rule.impl.RuleImpl;
 import org.drools.core.factmodel.traits.CoreWrapper;
 import org.drools.core.factmodel.traits.Thing;
 import org.drools.core.factmodel.traits.TraitableBean;
+import org.drools.core.impl.InternalKnowledgeBase;
 import org.drools.core.impl.StatefulKnowledgeSessionImpl;
 import org.drools.core.phreak.RuleAgendaItem;
+import org.drools.core.reteoo.LeftTuple;
 import org.drools.core.reteoo.ObjectTypeConf;
 import org.drools.core.reteoo.RuleTerminalNode;
 import org.drools.core.rule.Declaration;
+import org.drools.core.rule.EntryPointId;
 import org.drools.core.spi.Activation;
 import org.drools.core.spi.KnowledgeHelper;
 import org.drools.core.spi.Tuple;
 import org.drools.core.util.LinkedList;
 import org.drools.core.util.LinkedListEntry;
 import org.drools.core.util.bitmask.BitMask;
+import org.kie.api.event.KieRuntimeEventManager;
+import org.kie.api.event.process.ProcessEventManager;
 import org.kie.api.runtime.Channel;
 import org.kie.api.runtime.KieRuntime;
+import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.process.NodeInstance;
 import org.kie.api.runtime.process.NodeInstanceContainer;
 import org.kie.api.runtime.process.ProcessContext;
 import org.kie.api.runtime.process.ProcessInstance;
 import org.kie.api.runtime.process.WorkflowProcessInstance;
 import org.kie.api.runtime.rule.EntryPoint;
+import org.kie.api.runtime.rule.FactHandle;
 import org.kie.api.runtime.rule.Match;
+import org.kie.internal.process.CorrelationAwareProcessRuntime;
 import org.kie.internal.runtime.KnowledgeRuntime;
+import org.kie.internal.runtime.StatefulKnowledgeSession;
 import org.kie.internal.runtime.beliefs.Mode;
 
 import java.io.Externalizable;
@@ -81,30 +91,30 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
 
     private Activation                                activation;
     private Tuple                                     tuple;
-    private InternalWorkingMemoryActions              workingMemory;
+    private WrappedStatefulKnowledgeSessionForRHS     workingMemory;
 
     private LinkedList<LogicalDependency<T>>          previousJustified;
 
     private LinkedList<LogicalDependency<SimpleMode>> previousBlocked;
-
+    
     public DefaultKnowledgeHelper() {
 
     }
 
     public DefaultKnowledgeHelper(final WorkingMemory workingMemory) {
-        this.workingMemory = (InternalWorkingMemoryActions) workingMemory;
+        this.workingMemory = new WrappedStatefulKnowledgeSessionForRHS( workingMemory );
     }
 
     public DefaultKnowledgeHelper(Activation activation, final WorkingMemory workingMemory) {
-        this.workingMemory = (InternalWorkingMemoryActions) workingMemory;
+        this.workingMemory = new WrappedStatefulKnowledgeSessionForRHS( workingMemory );
         this.activation = activation;
     }
 
     public void readExternal(ObjectInput in) throws IOException,
                                             ClassNotFoundException {
         activation = (Activation) in.readObject();
-        tuple = (Tuple) in.readObject();
-        workingMemory = (InternalWorkingMemoryActions) in.readObject();
+        tuple = (LeftTuple) in.readObject();
+        workingMemory = (WrappedStatefulKnowledgeSessionForRHS) in.readObject();
     }
 
     public void writeExternal(ObjectOutput out) throws IOException {
@@ -140,7 +150,7 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
         // iterate to find previous equal logical insertion
         LogicalDependency<SimpleMode> dep = null;
         if ( this.previousBlocked != null ) {
-            for ( dep = (LogicalDependency<SimpleMode> ) this.previousBlocked.getFirst(); dep != null; dep = dep.getNext() ) {
+            for ( dep = this.previousBlocked.getFirst(); dep != null; dep = dep.getNext() ) {
                 if ( targetMatch ==  dep.getJustified() ) {
                     this.previousBlocked.remove( dep );
                     break;
@@ -187,7 +197,7 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
         
         if ( wasBlocked ) {
             RuleAgendaItem ruleAgendaItem = targetMatch.getRuleAgendaItem();
-            InternalAgenda agenda = (InternalAgenda) workingMemory.getAgenda();
+            InternalAgenda agenda = workingMemory.getAgenda();
             agenda.stageLeftTuple(ruleAgendaItem, targetMatch);
         }
     }
@@ -199,13 +209,12 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
 
     public InternalFactHandle insert(final Object object,
                                      final boolean dynamic) {
-        InternalFactHandle handle = (InternalFactHandle) this.workingMemory.insert( object,
-                                                                                    null,
-                                                                                    dynamic,
-                                                                                    false,
-                                                                                    this.activation.getRule(),
-                                                                                    this.activation );
-        return handle;
+        return (InternalFactHandle) this.workingMemory.insert( object,
+                                                               null,
+                                                               dynamic,
+                                                               false,
+                                                               this.activation.getRule(),
+                                                               this.activation );
     }
 
     @Override
@@ -269,18 +278,10 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
             return ( (BeliefSet) dep.getJustified() ).getFactHandle();
         } else {
             // no previous matching logical dependency, so create a new one
-            InternalFactHandle handle = workingMemory.getTruthMaintenanceSystem().insert(object,
-                                                                                         value,
-                                                                                         this.activation.getRule(),
-                                                                                         this.activation);
-//            FactHandle handle = this.workingMemory.insert( object,
-//                                                           value,
-//                                                           dynamic,
-//                                                           true,
-//                                                           this.activation.getRule(),
-//                                                           this.activation );
-
-            return handle;
+            return workingMemory.getTruthMaintenanceSystem().insert( object,
+                                                                     value,
+                                                                     this.activation.getRule(),
+                                                                     this.activation );
         }
     }
 
@@ -299,7 +300,6 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
         NamedEntryPoint ep = (NamedEntryPoint) workingMemory.getEntryPoint( EntryPointId.DEFAULT.getEntryPointId() );
         ObjectTypeConf otc = ep.getObjectTypeConfigurationRegistry().getObjectTypeConf( ep.getEntryPoint(), object );
 
-        Object mode = value;
         BeliefSystem beliefSystem;
         if ( value == null ) {
             beliefSystem = workingMemory.getTruthMaintenanceSystem().getBeliefSystem();
@@ -309,7 +309,6 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
                 beliefSystem = (BeliefSystem) m.getBeliefSystem();
             } else {
                 beliefSystem = workingMemory.getTruthMaintenanceSystem().getBeliefSystem();
-                mode = value;
             }
         }
 
@@ -340,7 +339,7 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
 
     public void cancelRemainingPreviousLogicalDependencies() {
         if ( this.previousJustified != null ) {
-            for ( LogicalDependency dep = (LogicalDependency) this.previousJustified.getFirst(); dep != null; dep = (LogicalDependency) dep.getNext() ) {
+            for ( LogicalDependency<T> dep = this.previousJustified.getFirst(); dep != null; dep = dep.getNext() ) {
                 TruthMaintenanceSystemHelper.removeLogicalDependency( dep, activation.getPropagationContext() );
             }
         }
@@ -354,7 +353,7 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
                 justified.getBlockers().remove( (SimpleMode) dep.getMode());
                 if (justified.getBlockers().isEmpty() ) {
                     RuleAgendaItem ruleAgendaItem = justified.getRuleAgendaItem();
-                    ((InternalAgenda) workingMemory.getAgenda()).stageLeftTuple(ruleAgendaItem, justified);
+                    workingMemory.getAgenda().stageLeftTuple(ruleAgendaItem, justified);
                 }
                 dep = tmp;
             }
@@ -367,13 +366,7 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
     }
 
     public InternalFactHandle getFactHandle(Object object) {
-        InternalFactHandle handle = null;
-
-        if ( handle != null ) {
-            return handle;
-        }
-        
-        handle = getFactHandleFromWM( object );
+        InternalFactHandle handle = getFactHandleFromWM( object );
 
         if ( handle == null ) {
             if ( object instanceof CoreWrapper ) {
@@ -387,8 +380,8 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
     }
     
     public InternalFactHandle getFactHandle(InternalFactHandle handle) {
-        Object object = ((InternalFactHandle)handle).getObject();
-        handle = (InternalFactHandle) getFactHandleFromWM( object );
+        Object object = handle.getObject();
+        handle = getFactHandleFromWM( object );
         if ( handle == null ) {
             throw new RuntimeException( "Update error: handle not found for object: " + object + ". Is it in the working memory?" );
         }
@@ -398,11 +391,11 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
     public void update(final FactHandle handle,
                        final Object newObject){
         InternalFactHandle h = (InternalFactHandle) handle;
-        ((InternalWorkingMemoryEntryPoint) h.getEntryPoint()).update( h,
-                                                                      newObject,
-                                                                      onlyTraitBitSetMask(),
-                                                                      newObject.getClass(),
-                                                                      this.activation );
+        h.getEntryPoint().update( h,
+                                  newObject,
+                                  onlyTraitBitSetMask(),
+                                  newObject.getClass(),
+                                  this.activation );
     }
 
     public void update(final FactHandle handle) {
@@ -441,26 +434,25 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
         delete( getFactHandle( object ) );
     }
 
+    public void delete(Object object, FactHandle.State fhState) {
+        delete( getFactHandle( object ), fhState );
+    }
+
     public void delete(FactHandle handle) {
+        delete(handle, FactHandle.State.ALL);
+    }
+
+    public void delete(FactHandle handle, FactHandle.State fhState ) {
         Object o = ((InternalFactHandle) handle).getObject();
         if ( ((InternalFactHandle) handle).isTraiting() ) {
             delete( ((Thing) o).getCore() );
             return;
         }
-        EqualityKey key = workingMemory.getTruthMaintenanceSystem().get( o );
 
-        if ( key == null || key.getStatus() == EqualityKey.STATED ) {
-            ((InternalWorkingMemoryEntryPoint) ((InternalFactHandle) handle).getEntryPoint()).delete(handle,
-                                                                                                     this.activation.getRule(),
-                                                                                                     this.activation);
-        }
-
-        // after removing the stated, it could still be justified
-        if ( key != null && key.getStatus() == EqualityKey.JUSTIFIED ) {
-            InternalFactHandle ifh = key.getLogicalFactHandle();
-            ((InternalWorkingMemoryEntryPoint) ifh.getEntryPoint()).getTruthMaintenanceSystem().delete( ifh );
-        }
-
+        ((InternalFactHandle) handle).getEntryPoint().delete(handle,
+                                                             this.activation.getRule(),
+                                                             this.activation,
+                                                             fhState);
     }
 
     public RuleImpl getRule() {
@@ -476,7 +468,7 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
     }
 
     public KnowledgeRuntime getKnowledgeRuntime() {
-        return (StatefulKnowledgeSessionImpl) this.workingMemory;
+        return this.workingMemory;
     }
 
     public Activation getMatch() {
@@ -488,15 +480,11 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
     }
 
     public Object get(final Declaration declaration) {
-        InternalWorkingMemoryEntryPoint wmTmp = ((InternalWorkingMemoryEntryPoint) (this.tuple.get( declaration )).getEntryPoint());
-
-        if ( wmTmp != null ) {
-            Object object = declaration.getValue( wmTmp.getInternalWorkingMemory(),
-                                                  this.tuple.get( declaration ).getObject() );
-            
-            return object;
-        }
-        return null;
+        InternalWorkingMemoryEntryPoint wmTmp = (this.tuple.get( declaration )).getEntryPoint();
+        return wmTmp != null ?
+               declaration.getValue( wmTmp.getInternalWorkingMemory(),
+                                                     this.tuple.getObject( declaration ) )
+                             : null;
     }
 
     public Declaration getDeclaration(final String identifier) {
@@ -582,14 +570,6 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
 
     /* Trait helper methods */
 
-    public <T, K> T don( Thing<K> core, Class<T> trait, boolean logical ) {
-        return don( core, trait, logical, null );
-    }
-
-    public <T, K> T don( Thing<K> core, Class<T> trait, Mode... modes ) {
-        return don( core, trait, true, modes );
-    }
-
     public <T, K> T don( Thing<K> core, Class<T> trait, boolean logical, Mode... modes ) {
         return don( core.getCore(), trait, logical, modes );
     }
@@ -639,5 +619,7 @@ public class DefaultKnowledgeHelper<T extends ModedAssertion<T>>
         return workingMemory.don( this.activation, core, trait, b, modes );
     }
 
-
+    public ClassLoader getProjectClassLoader() {
+        return ((InternalKnowledgeBase)getKieRuntime().getKieBase()).getRootClassLoader();
+    }
 }

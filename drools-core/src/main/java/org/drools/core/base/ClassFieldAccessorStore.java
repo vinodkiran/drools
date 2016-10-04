@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,9 +102,8 @@ public class ClassFieldAccessorStore
                                            accessorType );
         FieldLookupEntry entry = (FieldLookupEntry) this.lookup.get( key );
 
-        boolean exists = true;
-        if ( entry == null ) {
-            exists = false;
+        boolean exists = entry != null;
+        if ( !exists ) {
             entry = new FieldLookupEntry( new ClassFieldReader( className,
                                                                 fieldName ) );
         }
@@ -244,10 +243,18 @@ public class ClassFieldAccessorStore
                     }
                     // wire up ClassFieldReaders
                     if (lookupEntry.getClassFieldReader() != null ) {
-                        wire(((FieldLookupEntry)entry.getValue()).getClassFieldReader());
+                        InternalReadAccessor reader = ((FieldLookupEntry)entry.getValue()).getClassFieldReader();
+                        BaseClassFieldReader accessor = wire(reader);
+                        if (other.cache != null && reader instanceof ClassFieldReader) {
+                            other.cache.setReadAcessor( (ClassFieldReader) reader, accessor );
+                        }
                     }
                     if (lookupEntry.getClassFieldWriter() != null) {
-                        wire(((FieldLookupEntry)entry.getValue()).getClassFieldWriter());
+                        ClassFieldWriter writer = ((FieldLookupEntry)entry.getValue()).getClassFieldWriter();
+                        BaseClassFieldWriter accessor = wire(writer);
+                        if (other.cache != null) {
+                            other.cache.setWriteAcessor( writer, accessor );
+                        }
                     }
                     break;
                 }
@@ -256,9 +263,11 @@ public class ClassFieldAccessorStore
                     ClassObjectTypeLookupEntry lookupEntry = (ClassObjectTypeLookupEntry) this.lookup.get( entry.getKey() );
                     if ( lookupEntry == null ) {
                         // Create new entry with correct ClassObjectType and targets
-                        lookupEntry = new ClassObjectTypeLookupEntry(  cache.getClassObjectType( ((ClassObjectTypeLookupEntry) entry.getValue()).getClassObjectType(), true ) );
-                        this.lookup.put( entry.getKey(), lookupEntry );
-
+                        ClassObjectType oldObjectType = ((ClassObjectTypeLookupEntry) entry.getValue()).getClassObjectType();
+                        ClassObjectType newObjectType = cache.getClassObjectType( oldObjectType, true );
+                        this.lookup.put( entry.getKey(), new ClassObjectTypeLookupEntry( newObjectType ) );
+                        // also rewire the class of the old ClassObjectType in case it is still in use
+                        oldObjectType.setClassType( newObjectType.getClassType() );
                     }
                 }
             }
@@ -289,14 +298,23 @@ public class ClassFieldAccessorStore
         }
     }
 
-    public void wire(InternalReadAccessor reader) {
+    public BaseClassFieldReader wire(InternalReadAccessor reader) {
         if ( reader  instanceof ClassFieldReader ) {
-            ((ClassFieldReader)reader).setReadAccessor( cache.getReadAcessor( (ClassFieldReader) reader ) );
+            BaseClassFieldReader accessor = cache.getReadAcessor( (ClassFieldReader) reader );
+            ((ClassFieldReader)reader).setReadAccessor( accessor );
+            return accessor;
         }
+        return null;
     }
 
-    public void wire(ClassFieldWriter writer) {
-        writer.setWriteAccessor( cache.getWriteAcessor( writer ) );
+    public Class<?> getFieldType(Class<?> clazz, String fieldName) {
+        return ClassFieldAccessorFactory.getFieldType( clazz, fieldName, cache.getCacheEntry(clazz) );
+    }
+
+    public BaseClassFieldWriter wire(ClassFieldWriter writer) {
+        BaseClassFieldWriter accessor = cache.getWriteAcessor( writer );
+        writer.setWriteAccessor( accessor );
+        return accessor;
     }
 
     public void wire( ClassWireable wireable ) {

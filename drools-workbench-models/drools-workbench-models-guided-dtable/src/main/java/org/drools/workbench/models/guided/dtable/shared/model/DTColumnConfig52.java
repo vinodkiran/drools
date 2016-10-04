@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,7 +108,22 @@ public class DTColumnConfig52
         return result;
     }
 
+    /**
+     * Clones the configuration (width, header, hide, default value) of the argument into this instance.
+     * @param model
+     *         column instance to be cloned
+     */
+    public void cloneCommonColumnConfigFrom( DTColumnConfig52 model ) {
+        setWidth( model.getWidth() );
+        setHideColumn( model.isHideColumn() );
+        setHeader( model.getHeader() );
+        setDefaultValue( model.getDefaultValue() != null ? new DTCellValue52( model.getDefaultValue() ) : null );
+    }
+
     protected Object extractDefaultValue( final DTCellValue52 dcv ) {
+        if ( dcv == null ) {
+            return null;
+        }
         switch ( dcv.getDataType() ) {
             case BOOLEAN:
                 return dcv.getBooleanValue();

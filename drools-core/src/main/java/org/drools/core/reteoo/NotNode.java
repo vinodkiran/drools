@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,15 @@ package org.drools.core.reteoo;
 import org.drools.core.common.BetaConstraints;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalWorkingMemory;
-import org.drools.core.common.RightTupleSets;
+import org.drools.core.common.TupleSets;
 import org.drools.core.reteoo.builder.BuildContext;
 import org.drools.core.spi.PropagationContext;
 
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+
+import static org.drools.core.phreak.AddRemoveRule.flushLeftTupleIfNecessary;
 
 public class NotNode extends BetaNode {
     private static final long serialVersionUID = 510l;
@@ -87,26 +89,26 @@ public class NotNode extends BetaNode {
     }    
 
     public LeftTuple createLeftTuple(InternalFactHandle factHandle,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new NotNodeLeftTuple(factHandle, sink, leftTupleMemoryEnabled );
     }
 
     public LeftTuple createLeftTuple(final InternalFactHandle factHandle,
                                      final LeftTuple leftTuple,
-                                     final LeftTupleSink sink) {
+                                     final Sink sink) {
         return new NotNodeLeftTuple(factHandle,leftTuple, sink );
     }
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      PropagationContext pctx, boolean leftTupleMemoryEnabled) {
         return new NotNodeLeftTuple(leftTuple,sink, pctx, leftTupleMemoryEnabled );
     }
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
                                      RightTuple rightTuple,
-                                     LeftTupleSink sink) {
+                                     Sink sink) {
         return new NotNodeLeftTuple(leftTuple, rightTuple, sink );
     }   
     
@@ -114,7 +116,7 @@ public class NotNode extends BetaNode {
                                      RightTuple rightTuple,
                                      LeftTuple currentLeftChild,
                                      LeftTuple currentRightChild,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new NotNodeLeftTuple(leftTuple, rightTuple, currentLeftChild, currentRightChild, sink, leftTupleMemoryEnabled );        
     }       
@@ -132,7 +134,7 @@ public class NotNode extends BetaNode {
     public void assertObject( final InternalFactHandle factHandle,
                               final PropagationContext pctx,
                               final InternalWorkingMemory wm ) {
-        final BetaMemory memory = (BetaMemory) getBetaMemoryFromRightInput(this, wm);
+        final BetaMemory memory = getBetaMemoryFromRightInput(this, wm);
 
         RightTuple rightTuple = createRightTuple( factHandle,
                                                   this,
@@ -140,12 +142,15 @@ public class NotNode extends BetaNode {
 
         rightTuple.setPropagationContext(pctx);
 
-        // strangely we link here, this is actually just to force a network evaluation
-        // The assert is then processed and the rule unlinks then.
-        // This is because we need the first RightTuple to link with it's blocked
         boolean stagedInsertWasEmpty = memory.getStagedRightTuples().addInsert( rightTuple );
 
         if (  memory.getAndIncCounter() == 0 && isEmptyBetaConstraints()  ) {
+            // strangely we link here, this is actually just to force a network evaluation
+            // The assert is then processed and the rule unlinks then.
+            // This is because we need the first RightTuple to link with it's blocked
+            if ( stagedInsertWasEmpty ) {
+                memory.setNodeDirtyWithoutNotify();
+            }
             // NotNodes can only be unlinked, if they have no variable constraints
             memory.linkNode( wm );
         } else if ( stagedInsertWasEmpty ) {
@@ -153,7 +158,7 @@ public class NotNode extends BetaNode {
             memory.setNodeDirty(wm);
         }
 
-        flushLeftTupleIfNecessary(wm, memory.getSegmentMemory());
+        flushLeftTupleIfNecessary(wm, memory.getSegmentMemory(), null, isStreamMode());
     }
 
     public void retractRightTuple(final RightTuple rightTuple,
@@ -169,10 +174,13 @@ public class NotNode extends BetaNode {
     public void doDeleteRightTuple(final RightTuple rightTuple,
                                    final InternalWorkingMemory wm,
                                    final BetaMemory memory) {
-        RightTupleSets stagedRightTuples = memory.getStagedRightTuples();
+        TupleSets<RightTuple> stagedRightTuples = memory.getStagedRightTuples();
         boolean stagedDeleteWasEmpty = stagedRightTuples.addDelete( rightTuple );
 
         if (  memory.getAndDecCounter() == 1 && isEmptyBetaConstraints()  ) {
+            if ( stagedDeleteWasEmpty ) {
+                memory.setNodeDirtyWithoutNotify();
+            }
             // NotNodes can only be unlinked, if they have no variable constraints
             memory.linkNode( wm );
         }  else if ( stagedDeleteWasEmpty ) {
@@ -218,7 +226,7 @@ public class NotNode extends BetaNode {
             getRightInput().removeObjectSink( this );
             return true;
         }
-        return true;
+        return false;
     }
 
     public boolean isLeftUpdateOptimizationAllowed() {

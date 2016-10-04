@@ -1,9 +1,9 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -66,6 +66,7 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.Serializable;
 import java.io.StringReader;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -817,7 +818,7 @@ public class AccumulateTest extends CommonTestMethodBase {
         execTestAccumulateMax( "test_AccumulateMaxMVEL.drl" );
     }
 
-    @Test(timeout = 10000)
+    @Test//(timeout = 10000)
     public void testAccumulateMultiPatternJava() throws Exception {
         execTestAccumulateReverseModifyMultiPattern( "test_AccumulateMultiPattern.drl" );
     }
@@ -889,7 +890,7 @@ public class AccumulateTest extends CommonTestMethodBase {
         wm.insert( new Person( "Bob", "stilton" ) );
     }
 
-    @Test(timeout = 10000)
+    @Test//(timeout = 10000)
     public void testAccumulateWithSameSubnetwork() throws Exception {
         String rule = "package org.drools.compiler.test;\n" +
                       "import org.drools.compiler.Cheese;\n" +
@@ -922,7 +923,7 @@ public class AccumulateTest extends CommonTestMethodBase {
 
         // Check the network formation, to ensure the RiaNode is shared.
         ObjectTypeNode cheeseOtn = LinkingTest.getObjectTypeNode( kbase, Cheese.class );
-        ObjectSink[] oSinks = cheeseOtn.getSinkPropagator().getSinks();
+        ObjectSink[] oSinks = cheeseOtn.getObjectSinkPropagator().getSinks();
         assertEquals( 1, oSinks.length );
 
         JoinNode cheeseJoin = (JoinNode) oSinks[0];
@@ -930,7 +931,7 @@ public class AccumulateTest extends CommonTestMethodBase {
 
         assertEquals( 1, ltSinks.length );
         RightInputAdapterNode rian = (RightInputAdapterNode) ltSinks[0];
-        assertEquals( 2, rian.getSinkPropagator().size() );   //  RiaNode is shared, if this has two outputs
+        assertEquals( 2, rian.getObjectSinkPropagator().size() );   //  RiaNode is shared, if this has two outputs
 
         wm.insert( new Cheese( "stilton", 10 ) );
         wm.insert( new Person( "Alice", "brie" ) );
@@ -939,8 +940,8 @@ public class AccumulateTest extends CommonTestMethodBase {
         wm.fireAllRules();
 
         assertEquals( 2, list.size() );
-        assertEquals( "r1:10.0", list.get( 0 ) );
-        assertEquals( "r2:10.0", list.get( 1 ) );
+        assertEquals( "r1:10", list.get( 0 ) );
+        assertEquals( "r2:10", list.get( 1 ) );
     }
 
     public void execTestAccumulateSum( String fileName ) throws Exception {
@@ -1421,13 +1422,13 @@ public class AccumulateTest extends CommonTestMethodBase {
         wm.setGlobal( "results",
                       results );
 
-        final Cheese[] cheese = new Cheese[]{new Cheese( "stilton",
-                                                         10 ), new Cheese( "stilton",
-                                                                           2 ), new Cheese( "stilton",
-                                                                                            5 ), new Cheese( "brie",
-                                                                                                             15 ), new Cheese( "brie",
-                                                                                                                               16 ), new Cheese( "provolone",
-                                                                                                                                                 8 )};
+        final Cheese[] cheese = new Cheese[]{ new Cheese( "stilton", 10 ),
+                                              new Cheese( "stilton", 2 ),
+                                              new Cheese( "stilton", 5 ),
+                                              new Cheese( "brie", 15 ),
+                                              new Cheese( "brie", 16 ),
+                                              new Cheese( "provolone", 8 ) };
+
         final Person bob = new Person( "Bob",
                                        "stilton" );
         final Person mark = new Person( "Mark",
@@ -2003,11 +2004,11 @@ public class AccumulateTest extends CommonTestMethodBase {
         ksession.dispose();
         assertEquals( 1,
                       results.size() );
-        assertEquals( 9.0,
+        assertEquals( 9L,
                       results.get( 0 ) );
     }
 
-    @Test(timeout = 5000)
+    @Test(timeout = 10000)
     public void testInfiniteLoopAddingPkgAfterSession() throws Exception {
         // JBRULES-3488
         String rule = "package org.drools.compiler.test;\n" +
@@ -2660,8 +2661,8 @@ public class AccumulateTest extends CommonTestMethodBase {
                 "   Double() " +
                 "   String() " +
                 "   $list : java.util.List(  this not contains \"XX\" ) " +
-                "   $sum  : Double( ) from accumulate ( $i : Integer(), " +
-                "                                       sum( $i ) ) " +
+                "   $sum  : Integer( ) from accumulate ( $i : Integer(), " +
+                "                                        sum( $i ) ) " +
                 "then " +
                 "    $list.add( \"XX\" );\n" +
                 "    update( $list );\n" +
@@ -2977,23 +2978,17 @@ public class AccumulateTest extends CommonTestMethodBase {
         assertEquals( 2, counter.get() );
     }
 
-    private KieSession createKieSession( KieBase kbase ) {
-        return kbase.newKieSession();
-    }
-
     private KieSession getKieSessionFromResources( String... classPathResources ) {
         KieBase kbase = loadKnowledgeBase( null, null, classPathResources );
         return kbase.newKieSession();
     }
 
     private KieBase loadKieBaseFromString( String... drlContentStrings ) {
-        return loadKnowledgeBaseFromString( null, null, phreak,
-                                            drlContentStrings );
+        return loadKnowledgeBaseFromString( null, null, phreak, drlContentStrings );
     }
 
     private KieSession getKieSessionFromContentStrings( String... drlContentStrings ) {
-        KieBase kbase = loadKnowledgeBaseFromString( null, null, phreak,
-                                                     drlContentStrings );
+        KieBase kbase = loadKnowledgeBaseFromString( null, null, phreak, drlContentStrings );
         return kbase.newKieSession();
     }
 
@@ -3018,7 +3013,7 @@ public class AccumulateTest extends CommonTestMethodBase {
                                              .build()
                                              .newKieSession();
 
-        List<Double> list = new ArrayList<Double>();
+        List<Integer> list = new ArrayList<Integer>();
         ksession.setGlobal( "list", list );
 
         ksession.insert( 1 );
@@ -3027,7 +3022,7 @@ public class AccumulateTest extends CommonTestMethodBase {
         ksession.fireAllRules();
 
         assertEquals( 1, list.size() );
-        assertEquals( "hello".length(), (double)list.get(0), 0.01 );
+        assertEquals( "hello".length(), (int)list.get(0), 0.01 );
     }
 
     @Test
@@ -3060,12 +3055,213 @@ public class AccumulateTest extends CommonTestMethodBase {
         ksession.fireAllRules();
 
         assertEquals( 1, list.size() );
-        assertEquals( "hello".length(), (double)list.get(0), 0.01 );
+        assertEquals( "hello".length(), list.get(0), 0.01 );
     }
 
     public static class Converter {
         public static int convert(int i) {
             return i;
+        }
+    }
+
+    @Test
+    public void testNormalizeStagedTuplesInAccumulate() {
+        // DROOLS-998
+        String drl =
+                "global java.util.List list;\n" +
+                "rule R when\n" +
+                "    not( String() )\n" +
+                "    accumulate(\n" +
+                "        $l: Long();\n" +
+                "        count($l)\n" +
+                "    )\n" +
+                "    ( Boolean() or not( Float() ) )\n" +
+                "then\n" +
+                "    list.add( \"fired\" ); \n" +
+                "    insert(new String());\n" +
+                "end\n";
+
+        KieSession ksession = new KieHelper().addContent( drl, ResourceType.DRL )
+                                             .build()
+                                             .newKieSession();
+
+        List<String> list = new ArrayList<String>();
+        ksession.setGlobal( "list", list );
+
+        ksession.fireAllRules();
+        assertEquals( 1, list.size() );
+    }
+
+    @Test
+    public void testIncompatibleTypeOnAccumulateFunction() {
+        // DROOLS-1243
+        String drl =
+                "import " + MyPerson.class.getCanonicalName() + ";\n" +
+                "import " + BigDecimal.class.getCanonicalName() + ";\n" +
+                "global java.util.List list;\n" +
+                "rule R when\n" +
+                "  $theFrom : BigDecimal() from accumulate(MyPerson( $val : age ); \n" +
+                "                                          sum( $val ) )\n" +
+                "then\n" +
+                "  list.add($theFrom);\n" +
+                "end\n";
+
+        KieServices ks = KieServices.Factory.get();
+        KieFileSystem kfs = ks.newKieFileSystem().write( "src/main/resources/r1.drl", drl );
+        Results results = ks.newKieBuilder( kfs ).buildAll().getResults();
+        assertFalse( results.getMessages().isEmpty() );
+    }
+
+    @Test
+    public void testIncompatibleListOnAccumulateFunction() {
+        // DROOLS-1243
+        String drl =
+                "import " + MyPerson.class.getCanonicalName() + ";\n" +
+                "import " + BigDecimal.class.getCanonicalName() + ";\n" +
+                "global java.util.List list;\n" +
+                "rule R when\n" +
+                "  $theFrom : String() from accumulate(MyPerson( $val : age ); \n" +
+                "                                          collectList( $val ) )\n" +
+                "then\n" +
+                "  list.add($theFrom);\n" +
+                "end\n";
+
+        KieServices ks = KieServices.Factory.get();
+        KieFileSystem kfs = ks.newKieFileSystem().write( "src/main/resources/r1.drl", drl );
+        Results results = ks.newKieBuilder( kfs ).buildAll().getResults();
+        assertFalse( results.getMessages().isEmpty() );
+    }
+
+    @Test
+    public void testTypedSumOnAccumulate() {
+        // DROOLS-1175
+        String drl1 =
+                "global java.util.List list;\n" +
+                "rule R when\n" +
+                "  $i : Integer()\n" +
+                "  accumulate ( $s : String(), $result : sum( $s.length() ) )\n" +
+                "then\n" +
+                "  list.add($result);\n" +
+                "end";
+
+        KieSession ksession = new KieHelper().addContent( drl1, ResourceType.DRL )
+                                             .build()
+                                             .newKieSession();
+
+        List<Integer> list = new ArrayList<Integer>();
+        ksession.setGlobal( "list", list );
+
+        ksession.insert( 1 );
+        ksession.insert( "hello" );
+        ksession.insert( "hi" );
+        ksession.fireAllRules();
+
+        assertEquals( 1, list.size() );
+        assertEquals( "hello".length() + "hi".length(), (int)list.get(0) );
+    }
+
+    @Test
+    public void testSumAccumulateOnNullValue() {
+        // DROOLS-1242
+        String drl1 =
+                "import " + PersonWithBoxedAge.class.getCanonicalName() + ";\n" +
+                "global java.util.List list;\n" +
+                "rule R when\n" +
+                "  accumulate ( $p : PersonWithBoxedAge(), $result : sum( $p.getAge() ) )\n" +
+                "then\n" +
+                "  list.add($result);\n" +
+                "end";
+
+        KieSession ksession = new KieHelper().addContent( drl1, ResourceType.DRL )
+                                             .build()
+                                             .newKieSession();
+
+        List<Integer> list = new ArrayList<Integer>();
+        ksession.setGlobal( "list", list );
+
+        ksession.insert( new PersonWithBoxedAge("me", 30) );
+        ksession.insert( new PersonWithBoxedAge("you", 40) );
+        ksession.insert( new PersonWithBoxedAge("she", null) );
+        ksession.fireAllRules();
+
+        assertEquals( 1, list.size() );
+        assertEquals( 70, (int)list.get(0) );
+    }
+
+    @Test
+    public void testMinAccumulateOnComparable() {
+        String drl1 =
+                "import " + PersonWithBoxedAge.class.getCanonicalName() + ";\n" +
+                "global java.util.List list;\n" +
+                "rule R when\n" +
+                "  accumulate ( $p : PersonWithBoxedAge(), $result : min( $p ) )\n" +
+                "then\n" +
+                "  list.add($result);\n" +
+                "end";
+
+        KieSession ksession = new KieHelper().addContent( drl1, ResourceType.DRL )
+                                             .build()
+                                             .newKieSession();
+
+        List<PersonWithBoxedAge> list = new ArrayList<PersonWithBoxedAge>();
+        ksession.setGlobal( "list", list );
+
+        ksession.insert( new PersonWithBoxedAge("me", 30) );
+        ksession.insert( new PersonWithBoxedAge("you", 40) );
+        ksession.insert( new PersonWithBoxedAge("she", 25) );
+        ksession.fireAllRules();
+
+        assertEquals( 1, list.size() );
+        assertEquals( "she", list.get(0).getName() );
+    }
+
+    @Test
+    public void testMaxAccumulateOnComparable() {
+        String drl1 =
+                "import " + PersonWithBoxedAge.class.getCanonicalName() + ";\n" +
+                "global java.util.List list;\n" +
+                "rule R when\n" +
+                "  accumulate ( $p : PersonWithBoxedAge(), $result : max( $p ) )\n" +
+                "then\n" +
+                "  list.add($result);\n" +
+                "end";
+
+        KieSession ksession = new KieHelper().addContent( drl1, ResourceType.DRL )
+                                             .build()
+                                             .newKieSession();
+
+        List<PersonWithBoxedAge> list = new ArrayList<PersonWithBoxedAge>();
+        ksession.setGlobal( "list", list );
+
+        ksession.insert( new PersonWithBoxedAge("me", 30) );
+        ksession.insert( new PersonWithBoxedAge("you", 40) );
+        ksession.insert( new PersonWithBoxedAge("she", 25) );
+        ksession.fireAllRules();
+
+        assertEquals( 1, list.size() );
+        assertEquals( "you", list.get(0).getName() );
+    }
+
+    public static class PersonWithBoxedAge implements Comparable<PersonWithBoxedAge> {
+        private final String name;
+        private final Integer age;
+
+        public PersonWithBoxedAge( String name, Integer age ) {
+            this.name = name;
+            this.age = age;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public Integer getAge() {
+            return age;
+        }
+
+        @Override
+        public int compareTo( PersonWithBoxedAge other ) {
+            return age.compareTo( other.getAge() );
         }
     }
 }

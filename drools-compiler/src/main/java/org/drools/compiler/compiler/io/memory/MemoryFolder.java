@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,16 @@ import org.drools.compiler.compiler.io.File;
 import org.drools.compiler.compiler.io.Folder;
 import org.drools.compiler.compiler.io.Path;
 import org.drools.compiler.compiler.io.Resource;
+import org.drools.compiler.kie.builder.impl.KieFileSystemImpl;
 import org.drools.core.util.StringUtils;
 
+import java.io.Serializable;
 import java.util.Collection;
 
 public class MemoryFolder
         implements
-        Folder {
+        Folder,
+        Serializable {
     private MemoryFileSystem mfs;
 
     private String           path;
@@ -98,13 +101,14 @@ public class MemoryFolder
             }
         }
         
-        
-        
         return pFolder;
     }
     
     
     public static String trimLeadingAndTrailing(String p) {
+        if (p.isEmpty()) {
+            return p;
+        }
         while ( p.charAt( 0 ) == '/') {
             p = p.substring( 1 );
         }
@@ -118,7 +122,7 @@ public class MemoryFolder
 
     public Collection<? extends Resource> getMembers() {
         return mfs.getMembers( this );
-    }    
+    }
 
     public boolean exists() {
         return mfs.existsFolder( path );

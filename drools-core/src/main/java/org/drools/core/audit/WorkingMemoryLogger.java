@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -347,7 +347,7 @@ public abstract class WorkingMemoryLogger
     }
 
     private String extractFactHandleIds(Activation activation) {
-        InternalFactHandle activatingFact = (InternalFactHandle)activation.getPropagationContext().getFactHandleOrigin();
+        InternalFactHandle activatingFact = (InternalFactHandle)activation.getPropagationContext().getFactHandle();
         StringBuilder sb = new StringBuilder();
         if (activatingFact != null) {
             sb.append(activatingFact.getId());

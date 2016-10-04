@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,6 +15,7 @@
  */
 package org.drools.workbench.models.guided.dtable.shared.model;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -67,7 +68,7 @@ public class BRLActionVariableColumn extends ActionCol52
             return null;
         }
 
-        List<BaseColumnFieldDiff> result = super.diff( otherColumn );
+        List<BaseColumnFieldDiff> result = new ArrayList<>();
         BRLActionVariableColumn other = (BRLActionVariableColumn) otherColumn;
 
         // Field: varName.

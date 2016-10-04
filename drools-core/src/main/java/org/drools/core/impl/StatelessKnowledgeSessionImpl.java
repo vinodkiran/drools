@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,11 +26,8 @@ import org.drools.core.command.runtime.BatchExecutionCommandImpl;
 import org.drools.core.command.runtime.rule.FireAllRulesCommand;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.WorkingMemoryFactory;
-import org.drools.core.event.AgendaEventSupport;
-import org.drools.core.event.ProcessEventSupport;
-import org.drools.core.event.RuleRuntimeEventSupport;
+import org.drools.core.management.DroolsManagementAgent;
 import org.drools.core.runtime.impl.ExecutionResultImpl;
-import org.drools.core.runtime.process.InternalProcessRuntime;
 import org.kie.api.KieBase;
 import org.kie.api.command.Command;
 import org.kie.api.event.process.ProcessEventListener;
@@ -44,18 +41,19 @@ import org.kie.api.runtime.KieSessionConfiguration;
 import org.kie.api.runtime.ObjectFilter;
 import org.kie.api.runtime.StatelessKieSession;
 import org.kie.api.runtime.rule.FactHandle;
-import org.kie.internal.agent.KnowledgeAgent;
 import org.kie.internal.runtime.StatefulKnowledgeSession;
 import org.kie.internal.runtime.StatelessKnowledgeSession;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EventListener;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class StatelessKnowledgeSessionImpl extends AbstractRuntime
         implements
@@ -63,55 +61,37 @@ public class StatelessKnowledgeSessionImpl extends AbstractRuntime
         StatelessKieSession {
 
     private InternalKnowledgeBase kBase;
-    private KnowledgeAgent   kagent;
     private MapGlobalResolver    sessionGlobals = new MapGlobalResolver();
     private Map<String, Channel> channels       = new HashMap<String, Channel>();
 
-    /** The event mapping */
-    public Set<RuleRuntimeEventListener>          cachedRuleRuntimeListeners;
-    public Set<AgendaEventListener>               cachedAgendaListeners;
-    public Set<ProcessEventListener>              cachedProcessEventListener;
-
-    /** The event support */
-    private AgendaEventSupport        agendaEventSupport        = new AgendaEventSupport();
-    private RuleRuntimeEventSupport   ruleRuntimeEventSupport = new RuleRuntimeEventSupport();
-    private ProcessEventSupport       processEventSupport       = new ProcessEventSupport();
+    private final List<ListnerHolder> listeners = new CopyOnWriteArrayList<ListnerHolder>();
 
     private KieSessionConfiguration conf;
     private Environment             environment;
 
     private WorkingMemoryFactory wmFactory;
+    
+    private AtomicBoolean mbeanRegistered = new AtomicBoolean(false);
+    private DroolsManagementAgent.CBSKey mbeanRegisteredCBSKey;
+    private AtomicLong wmCreated = new AtomicLong(0);
 
     public StatelessKnowledgeSessionImpl() {
     }
 
     public StatelessKnowledgeSessionImpl(final InternalKnowledgeBase kBase,
-                                         final KnowledgeAgent kagent,
                                          final KieSessionConfiguration conf) {
         this.kBase = kBase;
-        this.kagent = kagent;
         this.conf = (conf != null) ? conf : SessionConfigurationImpl.getDefaultInstance();
         this.environment = EnvironmentFactory.newEnvironment();
         this.wmFactory = kBase.getConfiguration().getComponentFactory().getWorkingMemoryFactory();
     }
 
     public InternalKnowledgeBase getKnowledgeBase() {
-        if (this.kagent != null) {
-            // if we have an agent always get the rulebase from there
-            this.kBase = (InternalKnowledgeBase) this.kagent.getKnowledgeBase();
-        }
         return this.kBase;
     }
 
-    public KnowledgeAgent getKnowledgeAgent() {
-        return this.kagent;
-    }
 
     public StatefulKnowledgeSession newWorkingMemory() {
-        if (this.kagent != null) {
-            // if we have an agent always get the rulebase from there
-            this.kBase = (InternalKnowledgeBase) this.kagent.getKnowledgeBase();
-        }
         this.kBase.readLock();
         try {
             StatefulKnowledgeSession ksession = (StatefulKnowledgeSession) wmFactory.createWorkingMemory(this.kBase.nextWorkingMemoryCounter(),
@@ -120,135 +100,102 @@ public class StatelessKnowledgeSessionImpl extends AbstractRuntime
                                                                                                          this.environment);
             StatefulKnowledgeSessionImpl ksessionImpl = (StatefulKnowledgeSessionImpl) ksession;
 
-            // we don't pass the mapped listener wrappers to the session constructor anymore,
-            // because they would be ignored anyway, since the wm already contains those listeners
-
             ((Globals) ksessionImpl.getGlobalResolver()).setDelegate(this.sessionGlobals);
 
-            // copy over the default generated listeners that are used for internal stuff once
-            registerSystemListeners(ksessionImpl);
-            registerCustomListeners();
-
-            ksessionImpl.setAgendaEventSupport( this.agendaEventSupport );
-            ksessionImpl.setRuleRuntimeEventSupport(this.ruleRuntimeEventSupport);
-            InternalProcessRuntime processRuntime = ksessionImpl.internalGetProcessRuntime();
-            if ( processRuntime != null ) {
-                processRuntime.setProcessEventSupport( this.processEventSupport );
-            }
+            registerListeners( ksessionImpl );
 
             for( Map.Entry<String, Channel> entry : this.channels.entrySet() ) {
                 ksession.registerChannel( entry.getKey(), entry.getValue() );
             }
-
+            
+            wmCreated.incrementAndGet();
             return ksession;
         } finally {
             this.kBase.readUnlock();
         }
     }
-
-    private void registerSystemListeners(StatefulKnowledgeSessionImpl wm) {
-        for (AgendaEventListener listener : wm.getAgendaEventSupport().getEventListeners()) {
-            this.agendaEventSupport.addEventListener(listener);
-        }
-        for (RuleRuntimeEventListener listener : wm.getRuleRuntimeEventSupport().getEventListeners()) {
-            this.ruleRuntimeEventSupport.addEventListener(listener);
-        }
-        InternalProcessRuntime processRuntime = wm.internalGetProcessRuntime();
-        if ( processRuntime != null ) {
-            for ( ProcessEventListener listener : processRuntime.getProcessEventListeners() ) {
-                this.processEventSupport.addEventListener( listener );
-            }
+    
+    public void initMBeans(String containerId, String kbaseId, String ksessionName) {
+        if (kBase.getConfiguration() != null && kBase.getConfiguration().isMBeansEnabled() && mbeanRegistered.compareAndSet(false, true)) {
+            this.mbeanRegisteredCBSKey = new DroolsManagementAgent.CBSKey(containerId, kbaseId, ksessionName);
+            DroolsManagementAgent.getInstance().registerKnowledgeSessionUnderName(mbeanRegisteredCBSKey, this);
         }
     }
+    
+    public long getWorkingMemoryCreatec() {
+        return wmCreated.get();
+    }
 
-    private void registerCustomListeners() {
-        if ( cachedAgendaListeners != null ) {
-            for (AgendaEventListener agendaListener : cachedAgendaListeners) {
-                this.agendaEventSupport.addEventListener( agendaListener );
-            }
+    private void registerListeners( StatefulKnowledgeSessionImpl wm ) {
+        if ( listeners.isEmpty()) {
+            return;
         }
-        if ( cachedRuleRuntimeListeners != null ) {
-            for (RuleRuntimeEventListener wmListener : cachedRuleRuntimeListeners) {
-                this.ruleRuntimeEventSupport.addEventListener(wmListener);
-            }
-        }
-        if ( cachedProcessEventListener != null ) {
-            for (ProcessEventListener processListener : cachedProcessEventListener) {
-                this.processEventSupport.addEventListener( processListener );
+        for (ListnerHolder listnerHolder : listeners ) {
+            switch (listnerHolder.type) {
+                case AGENDA:
+                    wm.addEventListener( (AgendaEventListener)listnerHolder.listener );
+                    break;
+                case RUNTIME:
+                    wm.addEventListener( (RuleRuntimeEventListener)listnerHolder.listener );
+                    break;
+                case PROCESS:
+                    wm.addEventListener( (ProcessEventListener)listnerHolder.listener );
+                    break;
             }
         }
     }
 
     public void addEventListener(AgendaEventListener listener) {
-        registerAgendaEventListener(listener);
-    }
-
-    private void registerAgendaEventListener(AgendaEventListener listener) {
-        if ( this.cachedAgendaListeners == null ) {
-            this.cachedAgendaListeners = new HashSet<AgendaEventListener>();
-        }
-        this.cachedAgendaListeners.add(listener);
+        listeners.add( new ListnerHolder( ListnerHolder.Type.AGENDA, listener ) );
     }
 
     public Collection<AgendaEventListener> getAgendaEventListeners() {
-        return cachedAgendaListeners != null ? Collections.unmodifiableCollection( cachedAgendaListeners ) : Collections.<AgendaEventListener>emptySet();
+        return (Collection<AgendaEventListener>) getListeners(ListnerHolder.Type.AGENDA);
     }
 
     public void removeEventListener(AgendaEventListener listener) {
-        if ( this.cachedAgendaListeners != null ) {
-            cachedAgendaListeners.remove( listener );
-            this.agendaEventSupport.removeEventListener( listener );
-        }
+        listeners.remove( new ListnerHolder( ListnerHolder.Type.AGENDA, listener ) );
     }
 
     public void addEventListener(RuleRuntimeEventListener listener) {
-        registerRuleRuntimeEventListener(listener);
-    }
-
-    private void registerRuleRuntimeEventListener(RuleRuntimeEventListener listener) {
-        if ( this.cachedRuleRuntimeListeners == null ) {
-            this.cachedRuleRuntimeListeners = new HashSet<RuleRuntimeEventListener>();
-        }
-        this.cachedRuleRuntimeListeners.add(listener);
+        listeners.add( new ListnerHolder( ListnerHolder.Type.RUNTIME, listener ) );
     }
 
     public void removeEventListener(RuleRuntimeEventListener listener) {
-        if ( this.cachedRuleRuntimeListeners != null ) {
-            this.ruleRuntimeEventSupport.removeEventListener(listener);
-        }
+        listeners.remove( new ListnerHolder( ListnerHolder.Type.RUNTIME, listener ) );
     }
 
     public Collection<RuleRuntimeEventListener> getRuleRuntimeEventListeners() {
-        if ( this.cachedRuleRuntimeListeners == null ) {
-            this.cachedRuleRuntimeListeners = new HashSet<RuleRuntimeEventListener>();
-        }
-
-        return Collections.unmodifiableCollection( this.cachedRuleRuntimeListeners );
+        return (Collection<RuleRuntimeEventListener>) getListeners(ListnerHolder.Type.RUNTIME);
     }
 
     public void addEventListener(ProcessEventListener listener) {
-        if ( this.cachedProcessEventListener == null ) {
-            this.cachedProcessEventListener = new HashSet<ProcessEventListener>();
-        }
-        this.cachedProcessEventListener.add(listener);
-        this.processEventSupport.addEventListener(listener);
+        listeners.add( new ListnerHolder( ListnerHolder.Type.PROCESS, listener ) );
     }
 
     public Collection<ProcessEventListener> getProcessEventListeners() {
-        return Collections.unmodifiableCollection( this.cachedProcessEventListener );
+        return (Collection<ProcessEventListener>) getListeners(ListnerHolder.Type.PROCESS);
+    }
+
+    private Collection<? extends EventListener> getListeners(ListnerHolder.Type type) {
+        if ( listeners.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Collection<EventListener> l = new ArrayList<EventListener>();
+        for (ListnerHolder listnerHolder : listeners ) {
+            if (listnerHolder.type == type) {
+                l.add( listnerHolder.listener );
+            }
+        }
+        return l;
     }
 
     public void removeEventListener(ProcessEventListener listener) {
-        if (this.cachedProcessEventListener != null) {
-            this.cachedProcessEventListener.remove(listener);
-        }
-        this.processEventSupport.removeEventListener( listener );
+        listeners.remove( new ListnerHolder( ListnerHolder.Type.RUNTIME, listener ) );
     }
 
-    public void setGlobal(String identifier,
-                          Object value) {
-        this.sessionGlobals.setGlobal(identifier,
-                                      value);
+    public void setGlobal(String identifier, Object value) {
+        this.sessionGlobals.setGlobal(identifier, value);
     }
 
     public Globals getGlobals() {
@@ -361,20 +308,39 @@ public class StatelessKnowledgeSessionImpl extends AbstractRuntime
     }
 
     protected void dispose(StatefulKnowledgeSession ksession) {
-        StatefulKnowledgeSessionImpl wm = ((StatefulKnowledgeSessionImpl) ksession);
-
-        for ( AgendaEventListener listener : wm.getAgendaEventSupport().getEventListeners() ) {
-            this.agendaEventSupport.removeEventListener( listener );
-        }
-        for ( RuleRuntimeEventListener listener: wm.getRuleRuntimeEventSupport().getEventListeners() ) {
-            this.ruleRuntimeEventSupport.removeEventListener(listener);
-        }
-        InternalProcessRuntime processRuntime = wm.internalGetProcessRuntime();
-        if ( processRuntime != null ) {
-            for ( ProcessEventListener listener: processRuntime.getProcessEventListeners() ) {
-                this.processEventSupport.removeEventListener( listener );
-            }
-        }
         ksession.dispose();
     }
+
+    private static class ListnerHolder {
+        enum Type { AGENDA, RUNTIME, PROCESS }
+
+        final Type type;
+        final EventListener listener;
+
+        private ListnerHolder( Type type, EventListener listener ) {
+            this.type = type;
+            this.listener = listener;
+        }
+
+        @Override
+        public boolean equals( Object obj ) {
+            if ( this == obj ) {
+                return true;
+            }
+            if ( obj == null || !(obj instanceof ListnerHolder) ) {
+                return false;
+            }
+
+            ListnerHolder that = (ListnerHolder) obj;
+            return type == that.type && listener == that.listener;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = type.hashCode();
+            result = 31 * result + listener.hashCode();
+            return result;
+        }
+    }
+
 }

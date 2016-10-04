@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import org.drools.core.reteoo.ObjectTypeNode.ObjectTypeNodeMemory;
 import org.drools.core.reteoo.builder.BuildContext;
 import org.drools.core.rule.Behavior;
 import org.drools.core.rule.BehaviorManager;
-import org.drools.core.rule.ContextEntry;
 import org.drools.core.rule.EntryPointId;
 import org.drools.core.rule.SlidingTimeWindow;
 import org.drools.core.spi.AlphaNodeFieldConstraint;
@@ -98,6 +97,8 @@ public class WindowNode extends ObjectSource
             }
         }
         epNode = (EntryPointNode) getObjectTypeNode().getParentObjectSource();
+
+        hashcode = calculateHashCode();
     }
 
     @SuppressWarnings("unchecked")
@@ -161,23 +162,21 @@ public class WindowNode extends ObjectSource
     public void assertObject(final InternalFactHandle factHandle,
                              final PropagationContext pctx,
                              final InternalWorkingMemory workingMemory) {
-        final WindowMemory memory = (WindowMemory) workingMemory.getNodeMemory(this);
-
         EventFactHandle evFh = ( EventFactHandle ) factHandle;
-        int index = 0;
         for (AlphaNodeFieldConstraint constraint : constraints) {
-            if (!constraint.isAllowed(evFh, workingMemory, memory.context[index++])) {
+            if (!constraint.isAllowed(evFh, workingMemory)) {
                 return;
             }
         }
 
-        RightTuple rightTuple = new RightTuple( evFh, this );
+        RightTuple rightTuple = new RightTupleImpl( evFh, this );
         rightTuple.setPropagationContext( pctx );
 
         InternalFactHandle clonedFh = evFh.cloneAndLink();  // this is cloned, as we need to separate the child RightTuple references
-        rightTuple.setObject( clonedFh );
+        rightTuple.setContextObject( clonedFh );
 
         // process the behavior
+        final WindowMemory memory = (WindowMemory) workingMemory.getNodeMemory(this);
         if (!behavior.assertFact(memory.behaviorContext, clonedFh, pctx, workingMemory)) {
             return;
         }
@@ -194,25 +193,21 @@ public class WindowNode extends ObjectSource
             behavior.retractFact( memory.behaviorContext, rightTuple.getFactHandle(), pctx, wm );
         }
 
-        InternalFactHandle clonedFh = ( InternalFactHandle ) rightTuple.getObject();
+        InternalFactHandle clonedFh = ( InternalFactHandle ) rightTuple.getContextObject();
         ObjectTypeNode.doRetractObject(clonedFh, pctx, wm);
     }
 
     @Override
     public void modifyRightTuple(RightTuple rightTuple, PropagationContext context, InternalWorkingMemory workingMemory) {
-        final WindowMemory memory = (WindowMemory) workingMemory.getNodeMemory(this);
-
         EventFactHandle originalFactHandle = ( EventFactHandle ) rightTuple.getFactHandle();
-        EventFactHandle cloneFactHandle  = ( EventFactHandle ) rightTuple.getObject();
+        EventFactHandle cloneFactHandle  = ( EventFactHandle ) rightTuple.getContextObject();
         originalFactHandle.quickCloneUpdate( cloneFactHandle ); // make sure all fields are updated
 
         // behavior modify
-        int index = 0;
         boolean isAllowed = true;
         for (AlphaNodeFieldConstraint constraint : constraints) {
             if (!constraint.isAllowed(cloneFactHandle,
-                                      workingMemory,
-                                      memory.context[index++])) {
+                                      workingMemory)) {
                 isAllowed = false;
                 break;
             }
@@ -240,17 +235,16 @@ public class WindowNode extends ObjectSource
         RightTuple rightTuple = modifyPreviousTuples.peekRightTuple();
 
         // if the peek is for a different OTN we assume that it is after the current one and then this is an assert
-        while ( rightTuple != null &&
-                rightTuple.getRightTupleSink().getRightInputOtnId().before( getRightInputOtnId() ) ) {
+        while ( rightTuple != null && rightTuple.getInputOtnId().before( getRightInputOtnId() ) ) {
             modifyPreviousTuples.removeRightTuple();
 
             // we skipped this node, due to alpha hashing, so retract now
             rightTuple.setPropagationContext( context );
-            rightTuple.getRightTupleSink().retractRightTuple( rightTuple, context, wm );
+            rightTuple.retractTuple( context, wm );
             rightTuple = modifyPreviousTuples.peekRightTuple();
         }
 
-        if ( rightTuple != null && rightTuple.getRightTupleSink().getRightInputOtnId().equals(getRightInputOtnId()) ) {
+        if ( rightTuple != null && rightTuple.getInputOtnId().equals( getRightInputOtnId()) ) {
             modifyPreviousTuples.removeRightTuple();
             rightTuple.reAdd();
             modifyRightTuple( rightTuple, context, wm );
@@ -283,11 +277,6 @@ public class WindowNode extends ObjectSource
      */
     public Memory createMemory(final RuleBaseConfiguration config, InternalWorkingMemory wm) {
         WindowMemory memory = new WindowMemory();
-        memory.context = new ContextEntry[this.constraints.size()];
-        int index = 0;
-        for (AlphaNodeFieldConstraint alpha : constraints) {
-            memory.context[index++] = alpha.createContextEntry();
-        }
         memory.behaviorContext = this.behavior.createBehaviorContext();
         return memory;
     }
@@ -296,27 +285,23 @@ public class WindowNode extends ObjectSource
         return "[WindowNode(" + this.id + ") constraints=" + this.constraints + "]";
     }
 
-    public int hashCode() {
+    private int calculateHashCode() {
         return this.source.hashCode() * 17 + ((this.constraints != null) ? this.constraints.hashCode() : 0);
     }
 
-    /*
-     * (non-Javadoc)
-     *
-     * @see java.lang.Object#equals(java.lang.Object)
-     */
+    @Override
     public boolean equals(final Object object) {
-        if (this == object) {
-            return true;
-        }
+        return this == object ||
+               ( internalEquals( object ) && this.source.thisNodeEquals(((WindowNode) object).source) );
+    }
 
-        if (object == null || !(object instanceof WindowNode)) {
+    @Override
+    protected boolean internalEquals( Object object ) {
+        if ( object == null || !(object instanceof WindowNode) || this.hashCode() != object.hashCode() ) {
             return false;
         }
-
-        final WindowNode other = (WindowNode) object;
-
-        return this.source.equals(other.source) && this.constraints.equals(other.constraints) && behavior.equals(other.behavior);
+        WindowNode other = (WindowNode) object;
+        return this.constraints.equals(other.constraints) && behavior.equals(other.behavior);
     }
 
     /**
@@ -373,7 +358,6 @@ public class WindowNode extends ObjectSource
     }
 
     public static class WindowMemory implements Memory {
-        public ContextEntry[] context;
         public Behavior.Context[] behaviorContext;
 
         public short getNodeType() {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ public class ReteRightInputAdapterNode extends RightInputAdapterNode {
         }
 
         if ( useLeftMemory) {
-            leftTuple.setObject(handle);
+            leftTuple.setContextObject( handle );
         }
 
         // propagate it
@@ -85,19 +85,15 @@ public class ReteRightInputAdapterNode extends RightInputAdapterNode {
                                  final PropagationContext context,
                                  final InternalWorkingMemory workingMemory) {
         // retrieve handle from memory
-        final InternalFactHandle factHandle = (InternalFactHandle) tuple.getObject();
+        final InternalFactHandle factHandle = (InternalFactHandle) tuple.getContextObject();
 
         for ( RightTuple rightTuple = factHandle.getFirstRightTuple(); rightTuple != null; rightTuple = rightTuple.getHandleNext() ) {
-            rightTuple.getRightTupleSink().retractRightTuple( rightTuple,
-                                                              context,
-                                                              workingMemory );
+            rightTuple.retractTuple( context, workingMemory );
         }
         factHandle.clearRightTuples();
 
-        for ( LeftTuple leftTuple = factHandle.getLastLeftTuple(); leftTuple != null; leftTuple = leftTuple.getLeftParentNext() ) {
-            leftTuple.getLeftTupleSink().retractLeftTuple( leftTuple,
-                                                           context,
-                                                           workingMemory );
+        for ( LeftTuple leftTuple = factHandle.getLastLeftTuple(); leftTuple != null; leftTuple = leftTuple.getHandleNext() ) {
+            leftTuple.retractTuple( context, workingMemory );
         }
         factHandle.clearLeftTuples();
     }
@@ -107,13 +103,11 @@ public class ReteRightInputAdapterNode extends RightInputAdapterNode {
                                 PropagationContext context,
                                 InternalWorkingMemory workingMemory) {
         // add it to a memory mapping
-        InternalFactHandle handle = (InternalFactHandle) leftTuple.getObject();
+        InternalFactHandle handle = (InternalFactHandle) leftTuple.getContextObject();
 
         // propagate it
         for ( RightTuple rightTuple = handle.getFirstRightTuple(); rightTuple != null; rightTuple = rightTuple.getHandleNext() ) {
-            rightTuple.getRightTupleSink().modifyRightTuple( rightTuple,
-                                                             context,
-                                                             workingMemory );
+            rightTuple.modifyTuple( context, workingMemory );
         }
     }
 
@@ -136,7 +130,7 @@ public class ReteRightInputAdapterNode extends RightInputAdapterNode {
             final org.drools.core.util.Iterator it = bm.getRightTupleMemory().iterator();
             for ( RightTuple entry = (RightTuple) it.next(); entry != null; entry = (RightTuple) it.next() ) {
                 LeftTuple leftTuple = (LeftTuple) entry.getFactHandle().getObject();
-                InternalFactHandle handle = (InternalFactHandle) leftTuple.getObject();
+                InternalFactHandle handle = (InternalFactHandle) leftTuple.getContextObject();
                 sink.assertObject( handle,
                                    context,
                                    workingMemory );

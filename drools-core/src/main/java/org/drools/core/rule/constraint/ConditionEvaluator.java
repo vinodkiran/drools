@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@ package org.drools.core.rule.constraint;
 
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalWorkingMemory;
-import org.drools.core.reteoo.LeftTuple;
+import org.drools.core.spi.Tuple;
 
 public interface ConditionEvaluator {
-    boolean evaluate(InternalFactHandle handle, InternalWorkingMemory workingMemory, LeftTuple leftTuple);
+    boolean evaluate(InternalFactHandle handle, InternalWorkingMemory workingMemory, Tuple tuple);
 }

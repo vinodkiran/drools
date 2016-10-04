@@ -6,13 +6,17 @@
   <parent>
     <groupId>org.drools</groupId>
     <artifactId>drools</artifactId>
-    <version>6.4.0-SNAPSHOT</version>
+    <version>7.0.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>drools-beliefs</artifactId>
   <packaging>bundle</packaging><!-- bundle = jar + OSGi metadata -->
 
   <name>Drools :: Beliefs</name>
+
+  <properties>
+    <osgi.Bundle-SymbolicName>org.drools.beliefs</osgi.Bundle-SymbolicName>
+  </properties>
 
   <dependencies>
     <dependency>
@@ -83,7 +87,6 @@
         <artifactId>maven-bundle-plugin</artifactId>
         <configuration>
           <instructions>
-            <Bundle-SymbolicName>org.drools.beliefs</Bundle-SymbolicName>
             <Export-Package>
                 org.drools.beliefs.*
             </Export-Package>

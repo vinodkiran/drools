@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package org.drools.core.reteoo.builder;
 
-import org.drools.core.reteoo.LeftTupleSource;
 import org.drools.core.rule.QueryElement;
 import org.drools.core.rule.RuleConditionElement;
 
@@ -42,8 +41,8 @@ public class QueryElementBuilder
         utils.checkUnboundDeclarations( context,
                                         qe.getRequiredDeclarations() );
 
-        context.setTupleSource( (LeftTupleSource) utils.attachNode( context,
-                                                                    context.getComponentFactory().getNodeFactoryService().buildQueryElementNode(
+        context.setTupleSource( utils.attachNode( context,
+                                                  context.getComponentFactory().getNodeFactoryService().buildQueryElementNode(
                                                                                           context.getNextId(),
                                                                                           context.getTupleSource(),
                                                                                           qe,

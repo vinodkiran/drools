@@ -1,6 +1,6 @@
 @comment{
 
-  Copyright 2011 JBoss Inc
+  Copyright 2011 Red Hat, Inc. and/or its affiliates.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -32,7 +32,8 @@ when
     @{ pmmlPackageName }.SVM( context == $ctx, $svmId : svmId == "@{svmId}", $bias : bias, $numKernel : numSvs, target == "@{posCat}", alt == "@{negCat}" )
     accumulate( $k : @{ pmmlPackageName }.KernelEval( svmId == $svmId, $v : value ),
                 $num : count( $k ),
-                $sum : sumBD( $v );
+                // FIXME: DROOLS-1248
+                $sum : sumBD( java.math.BigDecimal.valueOf( $v ) );
                 $num == $numKernel
                 @if{ ! simple && oneVSmany } , $sum.doubleValue() + $bias > @{threshold} @end{} )
 then

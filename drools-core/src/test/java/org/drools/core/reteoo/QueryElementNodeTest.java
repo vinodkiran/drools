@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,21 +22,20 @@ import org.drools.core.common.PropagationContextFactory;
 import org.drools.core.definitions.rule.impl.RuleImpl;
 import org.drools.core.impl.InternalKnowledgeBase;
 import org.drools.core.impl.StatefulKnowledgeSessionImpl;
-import org.drools.core.test.model.DroolsTestCase;
 import org.drools.core.reteoo.builder.BuildContext;
 import org.drools.core.rule.Declaration;
 import org.drools.core.rule.Pattern;
+import org.drools.core.rule.QueryArgument;
 import org.drools.core.rule.QueryElement;
 import org.drools.core.spi.Activation;
 import org.drools.core.spi.PropagationContext;
-
+import org.drools.core.test.model.DroolsTestCase;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
-import org.kie.api.runtime.rule.Variable;
 import org.kie.internal.KnowledgeBaseFactory;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 public class QueryElementNodeTest extends DroolsTestCase {
     private PropagationContext  context;
@@ -58,7 +57,7 @@ public class QueryElementNodeTest extends DroolsTestCase {
 
     @Test
     public void testAttach() throws Exception {
-        QueryElement queryElement = new QueryElement(null, null, new Object[0], null, null, null, false, false);
+        QueryElement queryElement = new QueryElement(null, null, new QueryArgument[0], null, null, false, false);
 
         final MockTupleSource source = new MockTupleSource( 12 );
 
@@ -88,10 +87,10 @@ public class QueryElementNodeTest extends DroolsTestCase {
         Pattern p = new Pattern();
         QueryElement qe = new QueryElement( p,
                                             "queryName1",
-                                            new Object[]{Variable.v, "x1", Variable.v, "x3", "x4",Variable.v,"x6",},
-                                            new Declaration[0],
-                                            new int[0],
+                                            new QueryArgument[]{QueryArgument.VAR, new QueryArgument.Literal( "x1" ), QueryArgument.VAR,
+                                                    new QueryArgument.Literal( "x3" ), new QueryArgument.Literal( "x4" ), QueryArgument.VAR, new QueryArgument.Literal( "x6" ),},
                                             new int[] { 0, 2, 5 },
+                                            new Declaration[0],
                                             false,
                                             false );
        
@@ -122,24 +121,24 @@ public class QueryElementNodeTest extends DroolsTestCase {
         
         LeftTupleImpl leftTuple = (LeftTupleImpl)((Object[])sink.getAsserted().get( 2 ))[0];
         assertEquals(2, leftTuple.size());
-        assertEquals("string", leftTuple.getParent().getLastHandle().getObject() );
-        Object[] variables = (Object[]) leftTuple.getLastHandle().getObject();
+        assertEquals("string", leftTuple.getParent().getFactHandle().getObject() );
+        Object[] variables = (Object[]) leftTuple.getFactHandle().getObject();
         assertEquals( "string_0_2", variables[0] );
         assertEquals( "string_2_2", variables[1] );
         assertEquals( "string_5_2", variables[2] );
         
         leftTuple = (LeftTupleImpl)((Object[])sink.getAsserted().get( 1 ))[0];
         assertEquals(2, leftTuple.size());
-        assertEquals("string", leftTuple.getParent().getLastHandle().getObject() );
-        variables = (Object[]) leftTuple.getLastHandle().getObject();
+        assertEquals("string", leftTuple.getParent().getFactHandle().getObject() );
+        variables = (Object[]) leftTuple.getFactHandle().getObject();
         assertEquals( "string_0_1", variables[0] );
         assertEquals( "string_2_1", variables[1] );
         assertEquals( "string_5_1", variables[2] );
         
         leftTuple = (LeftTupleImpl)((Object[])sink.getAsserted().get( 0 ))[0];
         assertEquals(2, leftTuple.size());
-        assertEquals("string", leftTuple.getParent().getLastHandle().getObject() );
-        variables = (Object[]) leftTuple.getLastHandle().getObject();
+        assertEquals("string", leftTuple.getParent().getFactHandle().getObject() );
+        variables = (Object[]) leftTuple.getFactHandle().getObject();
         assertEquals( "string_0_0", variables[0] );
         assertEquals( "string_2_0", variables[1] );
         assertEquals( "string_5_0", variables[2] );

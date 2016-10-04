@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import org.drools.core.common.InternalWorkingMemoryActions;
 import org.drools.core.definitions.rule.impl.RuleImpl;
 import org.drools.core.factmodel.traits.Thing;
 import org.drools.core.factmodel.traits.TraitableBean;
+import org.drools.core.impl.InternalKnowledgeBase;
 import org.drools.core.impl.StatefulKnowledgeSessionImpl;
 import org.drools.core.rule.Declaration;
 import org.drools.core.rule.GroupElement;
@@ -39,7 +40,6 @@ import org.kie.internal.runtime.beliefs.Mode;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.IdentityHashMap;
 import java.util.Map;
 
 public class SequentialKnowledgeHelper
@@ -48,14 +48,14 @@ public class SequentialKnowledgeHelper
 
     private static final long                  serialVersionUID = 510l;
 
-    private RuleImpl                           rule;
-    private GroupElement                       subrule;
-    private Activation                         activation;
-    private Tuple                              tuple;
-    private final InternalWorkingMemoryActions workingMemory;
+    private RuleImpl                                    rule;
+    private GroupElement                                subrule;
+    private Activation                                  activation;
+    private Tuple                                       tuple;
+    private final WrappedStatefulKnowledgeSessionForRHS workingMemory;
 
     public SequentialKnowledgeHelper(final WorkingMemory workingMemory) {
-        this.workingMemory = (InternalWorkingMemoryActions) workingMemory;
+        this.workingMemory = new WrappedStatefulKnowledgeSessionForRHS( workingMemory );
     }
 
     public void setActivation(final Activation agendaItem) {
@@ -103,7 +103,7 @@ public class SequentialKnowledgeHelper
     }
     
     public KnowledgeRuntime getKnowledgeRuntime() {
-        return (StatefulKnowledgeSessionImpl) this.workingMemory;
+        return this.workingMemory;
      }
 
     public KieRuntime getKieRuntime() {
@@ -132,11 +132,11 @@ public class SequentialKnowledgeHelper
     //    }
     
     public Object get(final Declaration declaration) {
-        return declaration.getValue( workingMemory, this.tuple.get( declaration ).getObject() );
+        return declaration.getValue( workingMemory, this.tuple.getObject( declaration ) );
     }
 
     public Declaration getDeclaration(final String identifier) {
-        return (Declaration) this.subrule.getOuterDeclarations().get( identifier );
+        return this.subrule.getOuterDeclarations().get( identifier );
     }
     
     public void halt() {
@@ -144,7 +144,7 @@ public class SequentialKnowledgeHelper
     }
 
     public EntryPoint getEntryPoint(String id) {
-        return ((StatefulKnowledgeSessionImpl) this.workingMemory).getEntryPoint( id );
+        return this.workingMemory.getEntryPoint( id );
     }
 
     public Channel getChannel(String id) {
@@ -163,17 +163,8 @@ public class SequentialKnowledgeHelper
         return null;
     }
 
-    public <T, K> T don(Thing<K> core, Class<T> trait, boolean logical) {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
-    }
-
     @Override
     public <T, K> T don( K core, Class<T> trait, Mode... modes ) {
-        return null;
-    }
-
-    @Override
-    public <T, K> T don( Thing<K> core, Class<T> trait, Mode... modes ) {
         return null;
     }
 
@@ -216,6 +207,11 @@ public class SequentialKnowledgeHelper
     @Override
     public InternalFactHandle bolster( Object object ) {
         return null;
+    }
+
+    @Override
+    public ClassLoader getProjectClassLoader() {
+        return ((InternalKnowledgeBase)getKieRuntime().getKieBase()).getRootClassLoader();
     }
 
     public void cancelRemainingPreviousLogicalDependencies() {
@@ -287,6 +283,10 @@ public class SequentialKnowledgeHelper
         // TODO Auto-generated method stub
     }
 
+    public void delete(FactHandle handle, FactHandle.State fhState) {
+        // TODO Auto-generated method stub
+    }
+
     public void update(Object newObject) {
         // TODO Auto-generated method stub
     }
@@ -300,6 +300,10 @@ public class SequentialKnowledgeHelper
     }
 
     public void delete(Object handle) {
+        // TODO Auto-generated method stub
+    }
+
+    public void delete(Object handle, FactHandle.State fhState) {
         // TODO Auto-generated method stub
     }
 

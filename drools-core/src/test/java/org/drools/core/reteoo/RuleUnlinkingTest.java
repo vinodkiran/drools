@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,6 @@
 
 package org.drools.core.reteoo;
 
-import static org.junit.Assert.*;
-
-import java.util.List;
-
-import org.drools.core.RuleBaseConfiguration;
 import org.drools.core.base.ClassObjectType;
 import org.drools.core.common.DefaultFactHandle;
 import org.drools.core.common.EmptyBetaConstraints;
@@ -38,6 +33,10 @@ import org.junit.Test;
 import org.kie.api.KieBaseConfiguration;
 import org.kie.internal.KnowledgeBaseFactory;
 import org.kie.internal.builder.conf.RuleEngineOption;
+
+import java.util.List;
+
+import static org.junit.Assert.*;
 
 public class RuleUnlinkingTest {
     InternalKnowledgeBase kBase;
@@ -97,9 +96,9 @@ public class RuleUnlinkingTest {
 
         mockObjectSource.attach();
         if ( NodeTypeEnums.isLeftTupleSource( networkNode ) ) {
-            ((LeftTupleSource) networkNode).attach();
+            ((LeftTupleSource) networkNode).attach(buildContext);
         } else {
-            ((RuleTerminalNode) networkNode).attach();
+            ((RuleTerminalNode) networkNode).attach(buildContext);
         }
 
         return networkNode;
@@ -143,27 +142,27 @@ public class RuleUnlinkingTest {
 //                              \
 //                               n6 -> n7 -> n8 -> r3                   
                    
-        liaNode.addAssociation( rule1, null );
-        liaNode.addAssociation( rule2, null );
-        liaNode.addAssociation( rule3, null );
-        n1.addAssociation( rule1, null );
-        n1.addAssociation( rule2, null );
-        n1.addAssociation( rule3, null );
-        n2.addAssociation( rule1, null );
-        n2.addAssociation( rule2, null );
-        n2.addAssociation( rule3, null );
-        n3.addAssociation( rule1, null );
-        n3.addAssociation( rule2, null );
-        n3.addAssociation( rule3, null );
+        liaNode.addAssociation( rule1 );
+        liaNode.addAssociation( rule2 );
+        liaNode.addAssociation( rule3 );
+        n1.addAssociation( rule1 );
+        n1.addAssociation( rule2 );
+        n1.addAssociation( rule3 );
+        n2.addAssociation( rule1 );
+        n2.addAssociation( rule2 );
+        n2.addAssociation( rule3 );
+        n3.addAssociation( rule1 );
+        n3.addAssociation( rule2 );
+        n3.addAssociation( rule3 );
 
-        n4.addAssociation( rule2, null );
-        n4.addAssociation( rule3, null );
-        n5.addAssociation( rule2, null );
-        n5.addAssociation( rule3, null );
+        n4.addAssociation( rule2 );
+        n4.addAssociation( rule3 );
+        n5.addAssociation( rule2 );
+        n5.addAssociation( rule3 );
 
-        n6.addAssociation( rule3, null );
-        n7.addAssociation( rule3, null );
-        n8.addAssociation( rule3, null );
+        n6.addAssociation( rule3 );
+        n7.addAssociation( rule3 );
+        n8.addAssociation( rule3 );
         
         
         

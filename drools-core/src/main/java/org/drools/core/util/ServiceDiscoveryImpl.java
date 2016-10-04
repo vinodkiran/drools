@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ public class ServiceDiscoveryImpl implements ServiceDiscovery {
                 log.info( "Discovered kie.conf url={} ", url );
                 processKieConf( is, serviceRegistry );
             } catch ( Exception exc ) {
-                log.error( "Unable to build kie service url={} reason={}\n", url.toExternalForm(), exc.getMessage() );
+                throw new RuntimeException( "Unable to build kie service url = " + url.toExternalForm(), exc );
             } finally {
                 try {
                     if ( is != null ) {

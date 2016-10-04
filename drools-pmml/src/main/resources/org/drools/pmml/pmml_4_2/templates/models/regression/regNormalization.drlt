@@ -1,6 +1,6 @@
 @comment{
 
-  Copyright 2011 JBoss Inc
+  Copyright 2011 Red Hat, Inc. and/or its affiliates.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -32,7 +32,8 @@ when
                                          target == "@{target}",
                                          $wgt : weight,
                                          normalized == false ),
-                $den     : sumBD( $wgt ),
+                // FIXME: DROOLS-1248
+                $den     : sumBD( java.math.BigDecimal.valueOf( $wgt ) ),
                 $list    : collectList( $bit ) )
 then
     insert( new @{ pmmlPackageName }.RegNormalizationFactor( "@{context}", "@{target}", $den.doubleValue() ) );

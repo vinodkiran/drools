@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,6 +141,8 @@ public abstract class AbstractClassTypeDeclarationDescr extends AnnotatedBaseDes
         if ( this.fields == null ) {
             this.fields = new LinkedHashMap<String, TypeFieldDescr>();
         }
+        // Setting the resource on the field does not seem to be necessary (because it's always already been set)
+        // but I'm leaving in this just to be safe..
         field.setResource(getResource());
         this.fields.put( field.getFieldName(), field );
     }

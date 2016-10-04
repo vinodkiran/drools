@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,21 +15,22 @@
 
 package org.drools.reteoo.common;
 
-import org.drools.core.util.bitmask.BitMask;
-import org.drools.core.common.TruthMaintenanceSystem;
-import org.drools.core.spi.FactHandleFactory;
-import org.kie.api.runtime.rule.FactHandle;
 import org.drools.core.WorkingMemoryEntryPoint;
+import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalWorkingMemory;
 import org.drools.core.common.InternalWorkingMemoryEntryPoint;
 import org.drools.core.common.ObjectStore;
 import org.drools.core.common.ObjectTypeConfigurationRegistry;
+import org.drools.core.common.TruthMaintenanceSystem;
 import org.drools.core.definitions.rule.impl.RuleImpl;
 import org.drools.core.impl.InternalKnowledgeBase;
 import org.drools.core.reteoo.EntryPointNode;
 import org.drools.core.rule.EntryPointId;
 import org.drools.core.spi.Activation;
+import org.drools.core.spi.FactHandleFactory;
+import org.drools.core.util.bitmask.BitMask;
 import org.kie.api.runtime.ObjectFilter;
+import org.kie.api.runtime.rule.FactHandle;
 
 import java.util.Collection;
 
@@ -81,8 +82,18 @@ public class ReteWorkingMemoryEntryPoint implements WorkingMemoryEntryPoint, Int
     }
 
     @Override
+    public void delete(FactHandle handle, FactHandle.State fhState) {
+        delegate.delete(handle, fhState);
+    }
+
+    @Override
     public void update(FactHandle handle, Object object) {
         delegate.update(handle, object);
+    }
+
+    @Override
+    public void update(FactHandle handle, Object object, String... modifiedProperties) {
+        delegate.update(handle, object, modifiedProperties);
     }
 
     @Override
@@ -147,6 +158,11 @@ public class ReteWorkingMemoryEntryPoint implements WorkingMemoryEntryPoint, Int
     }
 
     @Override
+    public void delete(FactHandle factHandle, RuleImpl rule, Activation activation, FactHandle.State fhState ) {
+        ((InternalWorkingMemoryEntryPoint)delegate).delete(factHandle, rule, activation, fhState);
+    }
+
+    @Override
     public void update(FactHandle handle, Object object, BitMask mask, Class<?> modifiedClass, Activation activation) {
         ((InternalWorkingMemoryEntryPoint)delegate).update(handle, object, mask, modifiedClass, activation);
     }
@@ -179,5 +195,10 @@ public class ReteWorkingMemoryEntryPoint implements WorkingMemoryEntryPoint, Int
     @Override
     public EntryPointNode getEntryPointNode() {
         return ((InternalWorkingMemoryEntryPoint)delegate).getEntryPointNode();
+    }
+
+    @Override
+    public void removeFromObjectStore(InternalFactHandle handle ) {
+        ((InternalWorkingMemoryEntryPoint)delegate).removeFromObjectStore(handle);
     }
 }

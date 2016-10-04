@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import org.drools.core.spi.ConsequenceException;
 import org.drools.core.spi.InternalActivationGroup;
 import org.drools.core.spi.PropagationContext;
 import org.drools.core.spi.RuleFlowGroup;
+import org.drools.core.spi.Tuple;
 import org.kie.api.runtime.rule.Agenda;
 import org.kie.api.runtime.rule.AgendaFilter;
 
@@ -166,16 +167,16 @@ public interface InternalAgenda
                                 RuleAgendaItem ruleAgendaItem,
                                 InternalAgendaGroup agendaGroup);
 
-    boolean createActivation(final LeftTuple tuple,
-                                    final PropagationContext context,
-                                    final InternalWorkingMemory workingMemory,
-                                    final TerminalNode rtn );
+    boolean createActivation(final Tuple tuple,
+                             final PropagationContext context,
+                             final InternalWorkingMemory workingMemory,
+                             final TerminalNode rtn );
 
-    void cancelActivation(final LeftTuple leftTuple,
-                                 final PropagationContext context,
-                                 final InternalWorkingMemory workingMemory,
-                                 final Activation activation,
-                                 final TerminalNode rtn );
+    void cancelActivation(final Tuple leftTuple,
+                          final PropagationContext context,
+                          final InternalWorkingMemory workingMemory,
+                          final Activation activation,
+                          final TerminalNode rtn );
 
     /**
      * Adds the activation to the agenda. Depending on the mode the agenda is running,
@@ -248,6 +249,10 @@ public interface InternalAgenda
      */
     void fireUntilHalt(AgendaFilter agendaFilter);
 
+    boolean dispose();
+
+    boolean isAlive();
+
     AgendaGroup getAgendaGroup(String name);
 
     AgendaGroup getAgendaGroup(final String name,
@@ -280,6 +285,10 @@ public interface InternalAgenda
 
     boolean isFiring();
     void executeTask( ExecutableEntry executable );
+
+    void activate();
+    void deactivate();
+    boolean tryDeactivate();
 
     void insertAndStageActivation(AgendaItem activation);
 
@@ -321,4 +330,6 @@ public interface InternalAgenda
     boolean createPostponedActivation(LeftTuple postponedTuple, PropagationContext propagationContext, InternalWorkingMemory workingMemory, TerminalNode terminalNode);
 
     boolean isRuleActiveInRuleFlowGroup(String ruleflowGroupName, String ruleName, long processInstanceId);
+
+    void registerExpiration(PropagationContext expirationContext);
 }

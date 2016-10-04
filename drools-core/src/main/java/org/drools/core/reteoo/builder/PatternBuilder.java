@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import org.drools.core.base.mvel.MVELCompilationUnit.PropertyHandlerFactoryFixer
 import org.drools.core.common.AgendaItemImpl;
 import org.drools.core.common.InstanceNotEqualsConstraint;
 import org.drools.core.reteoo.EntryPointNode;
-import org.drools.core.reteoo.ObjectSource;
 import org.drools.core.reteoo.ObjectTypeNode;
 import org.drools.core.reteoo.WindowNode;
 import org.drools.core.rule.Behavior;
@@ -97,7 +96,7 @@ public class PatternBuilder
             }
         }
 
-        Constraints constraints = createConstraints(context, utils, pattern);
+        Constraints constraints = createConstraints(context, pattern);
 
         // Create BetaConstraints object
         context.setBetaconstraints( constraints.betaConstraints );
@@ -152,7 +151,7 @@ public class PatternBuilder
                                                                                                    behaviors,
                                                                                                    context.getObjectSource(),
                                                                                                    context );
-            context.setObjectSource( (WindowNode) utils.attachNode( context, wn ) );
+            context.setObjectSource( utils.attachNode( context, wn ) );
 
             // alpha constraints added to the window node already
             constraints.alphaConstraints.clear();
@@ -175,8 +174,8 @@ public class PatternBuilder
                 for (XpathConstraint.XpathChunk chunk : xpathConstraint.getChunks()) {
                     context.setAlphaConstraints(chunk.getAlphaConstraints());
                     context.setBetaconstraints(chunk.getBetaConstraints());
+                    context.setXpathConstraints(chunk.getXpathConstraints());
                     builder.build(context, utils, chunk.asFrom());
-                    context.incrementCurrentPatternOffset();
                 }
 
                 Declaration declaration = xpathConstraint.getDeclaration();
@@ -194,7 +193,7 @@ public class PatternBuilder
         }
     }
 
-    private Constraints createConstraints(BuildContext context, BuildUtils utils, Pattern pattern) {
+    private Constraints createConstraints(BuildContext context, Pattern pattern) {
         Constraints constraints = new Constraints();
         // check if cross products for identity patterns should be disabled
         checkRemoveIdentities( context,
@@ -316,8 +315,8 @@ public class PatternBuilder
         
         if ( context.getCurrentEntryPoint() != EntryPointId.DEFAULT && context.isAttachPQN() ) {
             if ( !context.getKnowledgeBase().getConfiguration().isPhreakEnabled() ) {
-                context.setObjectSource( (ObjectSource) utils.attachNode( context,
-                                                                          nfactory.buildPropagationQueuingNode( context.getNextId(),
+                context.setObjectSource( utils.attachNode( context,
+                                                           nfactory.buildPropagationQueuingNode( context.getNextId(),
                                                                                                                 context.getObjectSource(),
                                                                                                                 context ) ) );
             }
@@ -329,8 +328,8 @@ public class PatternBuilder
     protected void buildAlphaNodeChain( BuildContext context, BuildUtils utils, Pattern pattern, List<AlphaNodeFieldConstraint> alphaConstraints ) {
         for ( final AlphaNodeFieldConstraint constraint : alphaConstraints ) {
             context.pushRuleComponent( constraint );
-            context.setObjectSource( (ObjectSource) utils.attachNode( context,
-                                                                      context.getComponentFactory().getNodeFactoryService().buildAlphaNode( context.getNextId(),
+            context.setObjectSource( utils.attachNode( context,
+                                                       context.getComponentFactory().getNodeFactoryService().buildAlphaNode( context.getNextId(),
                                                                                                                                             constraint,
                                                                                                                                             context.getObjectSource(),
                                                                                                                                             context) ) );
@@ -382,8 +381,7 @@ public class PatternBuilder
             }
         }
 
-        context.setObjectSource( (ObjectSource) utils.attachNode( context,
-                                                                  otn ) );
+        context.setObjectSource( utils.attachNode( context, otn ) );
         context.setObjectTypeNodeMemoryEnabled( objectMemory );
     }
 
@@ -416,7 +414,9 @@ public class PatternBuilder
      */
     public boolean requiresLeftActivation(final BuildUtils utils,
                                           final RuleConditionElement rce) {
-        return ((Pattern) rce).getSource() != null || ! ((Pattern) rce).getBehaviors().isEmpty() ;
+        PatternSource source = ((Pattern) rce).getSource();
+        return (source != null && source.requiresLeftActivation() ) ||
+               ! ((Pattern) rce).getBehaviors().isEmpty() ;
     }
 
     private static class Constraints {

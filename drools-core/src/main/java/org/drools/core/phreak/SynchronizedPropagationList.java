@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,14 @@
 package org.drools.core.phreak;
 
 import org.drools.core.common.InternalWorkingMemory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 
 public class SynchronizedPropagationList implements PropagationList {
+
+    protected static final transient Logger log                = LoggerFactory.getLogger( SynchronizedPropagationList.class );
 
     protected final InternalWorkingMemory workingMemory;
 
@@ -33,62 +37,48 @@ public class SynchronizedPropagationList implements PropagationList {
     @Override
     public void addEntry(final PropagationEntry entry) {
         if (entry.requiresImmediateFlushing()) {
-            workingMemory.getAgenda().executeTask( new ExecutableEntry() {
-                @Override
-                public void execute() {
-                    ( (PhreakTimerNode.TimerAction) entry ).execute( workingMemory, true );
-                }
+        	if (entry.isCalledFromRHS()) {
+        		entry.execute(workingMemory);
+        	} else {
+        		workingMemory.getAgenda().executeTask( new ExecutableEntry() {
+        			@Override
+                    public void execute() {
+                        if (entry instanceof PhreakTimerNode.TimerAction) {
+                            ( (PhreakTimerNode.TimerAction) entry ).execute( workingMemory, true );
+                        } else {
+                            entry.execute( workingMemory );
+                        }
+                    }
 
-                @Override
-                public void enqueue() {
-                    internalAddEntry( entry );
-                }
-            } );
+                    @Override
+                    public void enqueue() {
+                        internalAddEntry( entry );
+                    }
+                } );
+        	}
         } else {
             internalAddEntry( entry );
         }
     }
 
     protected synchronized void internalAddEntry( PropagationEntry entry ) {
-        boolean wasEmpty = head == null;
-        if ( wasEmpty ) {
+        if ( head == null ) {
             head = entry;
+            notifyWaitOnRest();
         } else {
             tail.setNext( entry );
         }
         tail = entry;
-
-        if ( wasEmpty ) {
-            notifyHalt();
-        }
     }
 
     @Override
     public void flush() {
-        for ( PropagationEntry currentHead = takeAll(); currentHead != null; currentHead = takeAll() ) {
-            flush( workingMemory, currentHead );
-        }
+        flush( workingMemory, takeAll() );
     }
 
-    @Override
-    public void flushOnFireUntilHalt(boolean fired) {
-        flushOnFireUntilHalt( fired, takeAll() );
-    }
-
-    @Override
-    public void flushOnFireUntilHalt( boolean fired, PropagationEntry currentHead ) {
-        if ( !fired && currentHead == null) {
-            synchronized (this) {
-                if (head == null) {
-                    halt();
-                }
-                currentHead = takeAll();
-            }
-        }
-        while ( currentHead != null ) {
-            flush( workingMemory, currentHead );
-            currentHead = takeAll();
-        }
+    @Override public void flush(PropagationEntry currentHead)
+    {
+        flush( workingMemory, currentHead );
     }
 
     public static void flush( InternalWorkingMemory workingMemory, PropagationEntry currentHead ) {
@@ -118,19 +108,11 @@ public class SynchronizedPropagationList implements PropagationList {
                 }
                 newTail = entry;
             } else {
-                entry.execute(workingMemory);
+                entry.executeForMarshalling(workingMemory);
             }
         }
         head = newHead;
         tail = newTail;
-    }
-
-    private synchronized void halt() {
-        try {
-            wait();
-        } catch (InterruptedException e) {
-            // nothing to do
-        }
     }
 
     @Override
@@ -144,8 +126,17 @@ public class SynchronizedPropagationList implements PropagationList {
         return head == null;
     }
 
+    public synchronized void waitOnRest() {
+        try {
+            wait();
+        } catch (InterruptedException e) {
+            // do nothing
+        }
+    }
+
+
     @Override
-    public synchronized void notifyHalt() {
+    public synchronized void notifyWaitOnRest() {
         notifyAll();
     }
 
@@ -153,9 +144,6 @@ public class SynchronizedPropagationList implements PropagationList {
     public synchronized Iterator<PropagationEntry> iterator() {
         return new PropagationEntryIterator(head);
     }
-
-    @Override
-    public void onEngineInactive() { }
 
     public static class PropagationEntryIterator implements Iterator<PropagationEntry> {
 
@@ -182,4 +170,7 @@ public class SynchronizedPropagationList implements PropagationList {
             throw new UnsupportedOperationException();
         }
     }
+
+    @Override
+    public void onEngineInactive() { }
 }

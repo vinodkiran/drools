@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.drools.core.util.ClassUtils.convertFromPrimitiveType;
+import static org.drools.core.util.ClassUtils.isIterable;
+
 public class Pattern
     implements
     RuleConditionElement,
@@ -68,6 +71,8 @@ public class Pattern
     private int offset;
 
     private boolean           passive;
+    
+    private boolean                  hasXPath = false; 
 
     public Pattern() {
         this(0,
@@ -148,6 +153,7 @@ public class Pattern
         annotations = (Map<String,AnnotationDefinition>) in.readObject();
         passive = in.readBoolean();
         hasNegativeConstraint = in.readBoolean();
+        hasXPath = in.readBoolean();
     }
 
     public void writeExternal(ObjectOutput out) throws IOException {
@@ -163,6 +169,7 @@ public class Pattern
         out.writeObject( annotations );
         out.writeBoolean( passive );
         out.writeBoolean(hasNegativeConstraint);
+        out.writeBoolean(hasXPath);
     }
     
     public static InternalReadAccessor getReadAcessor(ObjectType objectType) {
@@ -280,6 +287,8 @@ public class Pattern
         }
         if ( constraint.getType().equals( Constraint.ConstraintType.UNKNOWN ) ) {
             this.setConstraintType( (MutableTypeConstraint) constraint );
+        } else if ( constraint.getType().equals( Constraint.ConstraintType.XPATH ) ) {
+            this.hasXPath = true;
         }
         this.constraints.add(index, constraint);
     }
@@ -291,6 +300,8 @@ public class Pattern
         for (Constraint constraint : constraints) {
             if ( constraint.getType().equals( Constraint.ConstraintType.UNKNOWN ) ) {
                 this.setConstraintType( (MutableTypeConstraint) constraint );
+            } else if ( constraint.getType().equals( Constraint.ConstraintType.XPATH ) ) {
+                this.hasXPath = true;
             }
             this.constraints.add(constraint);
         }
@@ -327,6 +338,10 @@ public class Pattern
             }
         }
         return combinableConstraints;
+    }
+    
+    public boolean hasXPath() {
+        return this.hasXPath;
     }
 
     public Declaration addDeclaration(final String identifier) {
@@ -519,5 +534,18 @@ public class Pattern
 
     public List<Class<?>> getXpathBackReferenceClasses() {
         return backRefDeclarations != null ? backRefDeclarations.getBackReferenceClasses() : Collections.EMPTY_LIST;
+    }
+
+    public boolean isCompatibleWithAccumulateReturnType( Class<?> returnType ) {
+        return returnType == null ||
+               returnType == Object.class ||
+               ( returnType == Comparable.class && objectType instanceof ClassObjectType && ((ClassObjectType)objectType).getClassType() == Number.class ) ||
+               objectType.isAssignableFrom( convertFromPrimitiveType(returnType) );
+    }
+
+    public boolean isCompatibleWithFromReturnType( Class<?> returnType ) {
+        return isCompatibleWithAccumulateReturnType( returnType ) ||
+               isIterable( returnType ) ||
+               ( objectType instanceof ClassObjectType && returnType.isAssignableFrom( ((ClassObjectType)objectType).getClassType()) );
     }
 }

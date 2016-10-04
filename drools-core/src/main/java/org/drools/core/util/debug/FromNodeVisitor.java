@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ public class FromNodeVisitor extends AbstractNetworkNodeVisitor {
                 LeftTuple child = leftTuple.getFirstChild();
                 while( child != null ) {
                     handles++;
-                    child = child.getLeftParentNext();
+                    child = child.getHandleNext();
                 }
             }
             ni.setCreatedFactHandles( handles );

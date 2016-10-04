@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,8 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
-import java.util.Map.Entry;
+import java.util.HashMap;
+import java.util.Map;
 
 public class EvalConditionNode extends LeftTupleSource
     implements
@@ -49,6 +50,8 @@ public class EvalConditionNode extends LeftTupleSource
 
     private LeftTupleSinkNode previousTupleSinkNode;
     private LeftTupleSinkNode nextTupleSinkNode;
+
+    private Map<Rule, RuleComponent> componentsMap = new HashMap<Rule, RuleComponent>();
 
     // ------------------------------------------------------------
     // Constructors
@@ -67,6 +70,8 @@ public class EvalConditionNode extends LeftTupleSource
         this.tupleMemoryEnabled = context.isTupleMemoryEnabled();
 
         initMasks(context, tupleSource);
+
+        hashcode = calculateHashCode();
     }
 
     public void readExternal(ObjectInput in) throws IOException,
@@ -74,12 +79,14 @@ public class EvalConditionNode extends LeftTupleSource
         super.readExternal( in );
         condition = (EvalCondition) in.readObject();
         tupleMemoryEnabled = in.readBoolean();
+        componentsMap = (Map<Rule, RuleComponent>) in.readObject();
     }
 
     public void writeExternal(ObjectOutput out) throws IOException {
         super.writeExternal( out );
         out.writeObject( condition );
         out.writeBoolean( tupleMemoryEnabled );
+        out.writeObject( componentsMap );
     }
 
     public void attach( BuildContext context ) {
@@ -119,25 +126,26 @@ public class EvalConditionNode extends LeftTupleSource
      * @return The debug string.
      */
     public String toString() {
-        return "[EvalConditionNode: cond=" + this.condition + "]";
+        return "[EvalConditionNode(" + this.id + ")]: cond=" + this.condition + "]";
     }
 
-    public int hashCode() {
+    private int calculateHashCode() {
         return this.leftInput.hashCode() ^ this.condition.hashCode();
     }
 
+    @Override
     public boolean equals(final Object object) {
-        if ( this == object ) {
-            return true;
-        }
+        return this == object ||
+               ( internalEquals( object ) && this.leftInput.thisNodeEquals( ((EvalConditionNode)object).leftInput ) );
+    }
 
-        if ( object == null || object.getClass() != EvalConditionNode.class ) {
+    @Override
+    protected boolean internalEquals( Object object ) {
+        if ( object == null || !(object instanceof EvalConditionNode) || this.hashCode() != object.hashCode() ) {
             return false;
         }
 
-        final EvalConditionNode other = (EvalConditionNode) object;
-
-        return this.leftInput.equals( other.leftInput ) && this.condition.equals( other.condition );
+        return this.condition.equals( ((EvalConditionNode)object).condition );
     }
 
     public EvalMemory createMemory(final RuleBaseConfiguration config, InternalWorkingMemory wm) {
@@ -203,26 +211,26 @@ public class EvalConditionNode extends LeftTupleSource
 
 
     public LeftTuple createLeftTuple(InternalFactHandle factHandle,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new EvalNodeLeftTuple(factHandle, sink, leftTupleMemoryEnabled );
     }
 
     public LeftTuple createLeftTuple(final InternalFactHandle factHandle,
                                      final LeftTuple leftTuple,
-                                     final LeftTupleSink sink) {
+                                     final Sink sink) {
         return new EvalNodeLeftTuple(factHandle,leftTuple, sink );
     }
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      PropagationContext pctx, boolean leftTupleMemoryEnabled) {
         return new EvalNodeLeftTuple(leftTuple,sink, pctx, leftTupleMemoryEnabled );
     }
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
                                      RightTuple rightTuple,
-                                     LeftTupleSink sink) {
+                                     Sink sink) {
         return new EvalNodeLeftTuple(leftTuple, rightTuple, sink );
     }   
     
@@ -230,7 +238,7 @@ public class EvalConditionNode extends LeftTupleSource
                                      RightTuple rightTuple,
                                      LeftTuple currentLeftChild,
                                      LeftTuple currentRightChild,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new EvalNodeLeftTuple(leftTuple, rightTuple, currentLeftChild, currentRightChild, sink, leftTupleMemoryEnabled );        
     }        
@@ -317,11 +325,23 @@ public class EvalConditionNode extends LeftTupleSource
         } else {
             // need to re-wire eval expression to the same one from another rule
             // that is sharing this node
-            Entry<Rule, RuleComponent> next = this.getAssociations().entrySet().iterator().next();
-            this.condition = (EvalCondition) next.getValue();
+            this.condition = (EvalCondition) componentsMap.values().iterator().next();
             return false;
         }
     }
 
+    @Override
+    public void addAssociation( BuildContext context, Rule rule ) {
+        super.addAssociation(context, rule);
+        componentsMap.put(rule, context.peekRuleComponent());
+    }
 
+    @Override
+    public boolean removeAssociation( Rule rule ) {
+        boolean result = super.removeAssociation(rule);
+        if (!isAssociatedWith( rule )) {
+            componentsMap.remove( rule );
+        }
+        return result;
+    }
 }

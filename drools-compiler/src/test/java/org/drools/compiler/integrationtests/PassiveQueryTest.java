@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -317,7 +317,7 @@ public class PassiveQueryTest {
 
         for (ObjectTypeNode otn : rete.getObjectTypeNodes()) {
             if ( Integer.class == otn.getObjectType().getValueType().getClassType() ) {
-                lia = (LeftInputAdapterNode)otn.getSinkPropagator().getSinks()[0];
+                lia = (LeftInputAdapterNode)otn.getObjectSinkPropagator().getSinks()[0];
                 break;
             }
         }
@@ -331,10 +331,6 @@ public class PassiveQueryTest {
 
         Memory memory1 = wm.getNodeMemory(q1);
         assertTrue(memory1.getSegmentMemory().getStagedLeftTuples().isEmpty());
-
-        Memory memory2 = wm.getNodeMemory(q2);
-        assertFalse(memory2.getSegmentMemory().getStagedLeftTuples().isEmpty());
-        assertNotNull(memory2.getSegmentMemory().getStagedLeftTuples().getInsertFirst());
 
         ksession.fireAllRules();
         assertEquals(1, list.size());

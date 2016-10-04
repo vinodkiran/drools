@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,6 @@ import org.drools.core.reteoo.test.dsl.ReteTesterHelper;
 import org.drools.core.rule.Declaration;
 import org.drools.core.rule.Pattern;
 import org.drools.core.spi.InternalReadAccessor;
-
-import java.beans.IntrospectionException;
 
 public class BetaNodeBuilder {
     BuildContext buildContext;
@@ -118,14 +116,10 @@ public class BetaNodeBuilder {
             Declaration declr = new Declaration(leftVariableName,
                                                 extractor,
                                                 pattern);
-            try {
                 betaConstraints = new SingleBetaConstraints(reteTesterHelper.getBoundVariableConstraint(rightType,
                                                                                                         constraintFieldName,
                                                                                                         declr,
                                                                                                         constraintOperator), buildContext.getKnowledgeBase().getConfiguration());
-            } catch (IntrospectionException e) {
-                throw new RuntimeException(e);
-            }
         } else {
             betaConstraints = new EmptyBetaConstraints();
         }

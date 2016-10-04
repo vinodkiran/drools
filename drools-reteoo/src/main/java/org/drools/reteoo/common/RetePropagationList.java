@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,30 +44,26 @@ public class RetePropagationList implements PropagationList {
     @Override
     public void flush() { }
 
+    @Override public void flush(PropagationEntry currentHead)
+    {
+
+    }
+
     @Override
     public void flushNonMarshallable() { }
 
     @Override
-    public void flushOnFireUntilHalt(boolean fired) {
-        flushOnFireUntilHalt( fired, null );
+    public void waitOnRest() {
+
     }
 
     @Override
-    public void flushOnFireUntilHalt( boolean fired, PropagationEntry currentHead ) {
-        if ( !fired ) {
-            synchronized ( this ) {
-                try {
-                    this.wait();
-                } catch (InterruptedException e) {
-                    // nothing to do
-                }
-            }
-        }
-        flush();
+    public void onEngineInactive() {
+
     }
 
     @Override
-    public void notifyHalt() {
+    public void notifyWaitOnRest() {
         synchronized ( this ) {
             this.notifyAll();
         }
@@ -86,6 +82,4 @@ public class RetePropagationList implements PropagationList {
         return Collections.<PropagationEntry>emptyList().iterator();
     }
 
-    @Override
-    public void onEngineInactive() { }
 }

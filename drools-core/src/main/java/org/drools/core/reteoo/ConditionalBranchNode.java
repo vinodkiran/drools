@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,6 @@ import java.io.ObjectOutput;
  */
 public class ConditionalBranchNode extends LeftTupleSource implements LeftTupleSinkNode, MemoryFactory<ConditionalBranchNode.ConditionalBranchMemory>  {
 
-    private LeftTupleSource tupleSource;
-
     protected ConditionalBranchEvaluator branchEvaluator;
 
     protected boolean tupleMemoryEnabled;
@@ -52,17 +50,18 @@ public class ConditionalBranchNode extends LeftTupleSource implements LeftTupleS
                                   ConditionalBranchEvaluator branchEvaluator,
                                   BuildContext context ) {
         super(id, context);
-        this.tupleSource = tupleSource;
+        setLeftTupleSource( tupleSource );
         this.tupleMemoryEnabled = context.isTupleMemoryEnabled();
         this.branchEvaluator = branchEvaluator;
 
         initMasks(context, tupleSource);
+
+        hashcode = calculateHashCode();
     }
 
     @Override
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
         super.readExternal(in);
-        tupleSource = (LeftTupleSource) in.readObject();
         tupleMemoryEnabled = in.readBoolean();
         branchEvaluator = (ConditionalBranchEvaluator) in.readObject();
     }
@@ -70,7 +69,6 @@ public class ConditionalBranchNode extends LeftTupleSource implements LeftTupleS
     @Override
     public void writeExternal(ObjectOutput out) throws IOException {
         super.writeExternal(out);
-        out.writeObject(tupleSource);
         out.writeBoolean(tupleMemoryEnabled);
         out.writeObject(branchEvaluator);
     }
@@ -81,15 +79,11 @@ public class ConditionalBranchNode extends LeftTupleSource implements LeftTupleS
     }
 
     public void attach( BuildContext context ) {
-        this.tupleSource.addTupleSink(this, context);
+        getLeftTupleSource().addTupleSink(this, context);
     }
 
     public void networkUpdated(UpdateContext updateContext) {
-        this.tupleSource.networkUpdated(updateContext);
-    }
-
-    public LeftTupleSource getLeftTupleSource() {
-        return this.tupleSource;
+        getLeftTupleSource().networkUpdated(updateContext);
     }
 
     /**
@@ -101,22 +95,23 @@ public class ConditionalBranchNode extends LeftTupleSource implements LeftTupleS
         return "[ConditionalBranchNode: cond=" + this.branchEvaluator + "]";
     }
 
-    public int hashCode() {
-        return this.tupleSource.hashCode() ^ this.branchEvaluator.hashCode();
+    private int calculateHashCode() {
+        return getLeftTupleSource().hashCode() ^ this.branchEvaluator.hashCode();
     }
 
-    public boolean equals(final Object object) {
-        if ( this == object ) {
-            return true;
-        }
+    @Override
+    public boolean equals(Object object) {
+        return this == object ||
+               ( internalEquals( object ) && getLeftTupleSource().thisNodeEquals( ((ConditionalBranchNode)object).getLeftTupleSource() ) );
+    }
 
-        if ( object == null || object.getClass() != ConditionalBranchNode.class ) {
+    @Override
+    protected boolean internalEquals( Object object ) {
+        if ( object == null || !(object instanceof ConditionalBranchNode) || this.hashCode() != object.hashCode() ) {
             return false;
         }
 
-        final ConditionalBranchNode other = (ConditionalBranchNode) object;
-
-        return this.tupleSource.equals( other.tupleSource ) && this.branchEvaluator.equals( other.branchEvaluator );
+        return this.branchEvaluator.equals( ((ConditionalBranchNode)object).branchEvaluator );
     }
 
     public ConditionalBranchMemory createMemory(final RuleBaseConfiguration config, InternalWorkingMemory wm) {
@@ -180,26 +175,26 @@ public class ConditionalBranchNode extends LeftTupleSource implements LeftTupleS
     }
 
     public LeftTuple createLeftTuple(InternalFactHandle factHandle,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new EvalNodeLeftTuple(factHandle, sink, leftTupleMemoryEnabled );
     }
 
     public LeftTuple createLeftTuple(final InternalFactHandle factHandle,
                                      final LeftTuple leftTuple,
-                                     final LeftTupleSink sink) {
+                                     final Sink sink) {
         return new EvalNodeLeftTuple(factHandle,leftTuple, sink );
     }
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      PropagationContext pctx, boolean leftTupleMemoryEnabled) {
         return new EvalNodeLeftTuple(leftTuple,sink, pctx, leftTupleMemoryEnabled );
     }
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
                                      RightTuple rightTuple,
-                                     LeftTupleSink sink) {
+                                     Sink sink) {
         return new EvalNodeLeftTuple(leftTuple, rightTuple, sink );
     }
 
@@ -207,7 +202,7 @@ public class ConditionalBranchNode extends LeftTupleSource implements LeftTupleS
                                      RightTuple rightTuple,
                                      LeftTuple currentLeftChild,
                                      LeftTuple currentRightChild,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new EvalNodeLeftTuple(leftTuple, rightTuple, currentLeftChild, currentRightChild, sink, leftTupleMemoryEnabled );
     }
@@ -256,7 +251,7 @@ public class ConditionalBranchNode extends LeftTupleSource implements LeftTupleS
     }
 
     protected ObjectTypeNode getObjectTypeNode() {
-        return tupleSource.getObjectTypeNode();
+        return getLeftTupleSource().getObjectTypeNode();
     }
 
     @Override
@@ -288,7 +283,7 @@ public class ConditionalBranchNode extends LeftTupleSource implements LeftTupleS
                                final ReteooBuilder builder,
                                final InternalWorkingMemory[] workingMemories) {
         if ( !this.isInUse() ) {
-            tupleSource.removeTupleSink( this );
+            getLeftTupleSource().removeTupleSink( this );
             return true;
         } else {
             throw new RuntimeException("ConditionalBranchNode cannot be shared");

@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -61,7 +61,7 @@ public class BRLConditionVariableColumn extends ConditionCol52
             return null;
         }
 
-        List<BaseColumnFieldDiff> result = super.diff( otherColumn );
+        List<BaseColumnFieldDiff> result = conditionCol52SpecificDiff( otherColumn );
         BRLConditionVariableColumn other = (BRLConditionVariableColumn) otherColumn;
 
         // Field: varName.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,10 +64,7 @@ public class MetadataCol52 extends DTColumnConfig52 {
     public MetadataCol52 cloneColumn() {
         MetadataCol52 cloned = new MetadataCol52();
         cloned.setMetadata( getMetadata() );
-        cloned.setWidth( getWidth() );
-        cloned.setHideColumn( isHideColumn() );
-        cloned.setHeader( getHeader() );
-        cloned.setDefaultValue( getDefaultValue() != null ? getDefaultValue().cloneDefaultValueCell() : null );
+        cloned.cloneCommonColumnConfigFrom( this );
         return cloned;
     }
 

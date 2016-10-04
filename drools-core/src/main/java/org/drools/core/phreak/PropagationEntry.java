@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,9 +30,12 @@ import org.drools.core.time.JobContext;
 import org.drools.core.time.JobHandle;
 import org.drools.core.time.impl.PointInTimeTrigger;
 
+import java.util.concurrent.CountDownLatch;
+
 public interface PropagationEntry {
 
     void execute(InternalWorkingMemory wm);
+    void executeForMarshalling(InternalWorkingMemory wm);
     void execute(InternalKnowledgeRuntime kruntime);
 
     PropagationEntry getNext();
@@ -41,6 +44,8 @@ public interface PropagationEntry {
     boolean isMarshallable();
 
     boolean requiresImmediateFlushing();
+    
+    boolean isCalledFromRHS();
 
     abstract class AbstractPropagationEntry implements PropagationEntry {
         private PropagationEntry next;
@@ -62,10 +67,45 @@ public interface PropagationEntry {
         public boolean requiresImmediateFlushing() {
             return false;
         }
+        
+        @Override
+        public boolean isCalledFromRHS() {
+            return false;
+        }
 
         @Override
         public void execute(InternalKnowledgeRuntime kruntime) {
             execute( ((InternalWorkingMemoryEntryPoint) kruntime).getInternalWorkingMemory() );
+        }
+
+        @Override
+        public void executeForMarshalling(InternalWorkingMemory wm) {
+            execute( wm );
+        }
+    }
+
+    abstract class PropagationEntryWithResult<T> extends PropagationEntry.AbstractPropagationEntry {
+        private final CountDownLatch done = new CountDownLatch( 1 );
+
+        private T result;
+
+        public final T getResult() {
+            try {
+                done.await();
+            } catch (InterruptedException e) {
+                throw new RuntimeException( e );
+            }
+            return result;
+        }
+
+        protected void done(T result) {
+            this.result = result;
+            done.countDown();
+        }
+
+        @Override
+        public boolean requiresImmediateFlushing() {
+            return true;
         }
     }
 
@@ -88,7 +128,13 @@ public interface PropagationEntry {
             this.insertionTime = isEvent ? workingMemory.getTimerService().getCurrentTime() : 0L;
         }
 
-        public void execute(InternalWorkingMemory wm) {
+        @Override
+        public void executeForMarshalling( InternalWorkingMemory wm ) {
+            context.setMarshalling( true );
+            execute(wm);
+        }
+
+        public void execute( InternalWorkingMemory wm ) {
             for ( ObjectTypeNode otn : objectTypeConf.getObjectTypeNodes() ) {
                 otn.propagateAssert( handle, context, wm );
                 if (isEvent) {
@@ -111,12 +157,13 @@ public interface PropagationEntry {
             long effectiveEnd = eventFactHandle.getEndTimestamp() + expirationOffset;
             long nextTimestamp = Math.max( insertionTime,
                                            effectiveEnd >= 0 ? effectiveEnd : Long.MAX_VALUE );
-            JobContext jobctx = new ObjectTypeNode.ExpireJobContext( new WorkingMemoryReteExpireAction( (EventFactHandle) handle, otn ),
-                                                                     workingMemory );
 
             if (nextTimestamp < workingMemory.getTimerService().getCurrentTime()) {
-                job.execute( jobctx );
+                WorkingMemoryReteExpireAction action = new WorkingMemoryReteExpireAction( (EventFactHandle) handle, otn );
+                action.execute(workingMemory);  // this can now execute straight away, as alpha node propagation is now done by the engine thread
             } else {
+                JobContext jobctx = new ObjectTypeNode.ExpireJobContext( new WorkingMemoryReteExpireAction( (EventFactHandle) handle, otn ),
+                                                                         workingMemory );
                 JobHandle jobHandle = workingMemory.getTimerService()
                                                    .scheduleJob( job,
                                                                  jobctx,

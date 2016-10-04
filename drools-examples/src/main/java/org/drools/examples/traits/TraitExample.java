@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,41 +18,23 @@ package org.drools.examples.traits;
 
 
 import org.drools.core.io.impl.ClassPathResource;
-import org.kie.internal.KnowledgeBase;
-import org.kie.internal.KnowledgeBaseFactory;
-import org.kie.internal.builder.KnowledgeBuilder;
-import org.kie.internal.builder.KnowledgeBuilderFactory;
-import org.kie.api.io.ResourceType;
-import org.kie.internal.runtime.StatefulKnowledgeSession;
+import org.kie.api.runtime.KieSession;
+import org.kie.internal.utils.KieHelper;
 
 import java.util.Collection;
 
 
 public class TraitExample {
 
-
-    private static StatefulKnowledgeSession getSession( String drl ) {
-
-        KnowledgeBuilder kBuilder = KnowledgeBuilderFactory.newKnowledgeBuilder();
-        kBuilder.add( new ClassPathResource( "org/drools/examples/traits/" + drl ), ResourceType.DRL );
-
-        if ( kBuilder.hasErrors() ) {
-            System.err.println( kBuilder.getErrors().toString() );
-        }
-        
-        KnowledgeBase kBase = KnowledgeBaseFactory.newKnowledgeBase();
-        kBase.addKnowledgePackages( kBuilder.getKnowledgePackages() );
-
-        return kBase.newStatefulKnowledgeSession();
-
+    private static KieSession getSession( String drl ) {
+        KieHelper kieHelper = new KieHelper();
+        kieHelper.kfs.write( new ClassPathResource( "org/drools/examples/traits/" + drl ) );
+        return kieHelper.build().newKieSession();
     }
 
     public static void run( String demo ) {
-
-        StatefulKnowledgeSession kSession = getSession( demo );
-
+        KieSession kSession = getSession( demo );
         kSession.fireAllRules();
-
 
         Collection c =  kSession.getObjects();
         System.out.println( "------------------------- " + c.size() + " ----------------------" );
@@ -62,9 +44,7 @@ public class TraitExample {
         System.out.println( "-----------------------------------------------------------------" );
 
         kSession.dispose();
-
     }
-
 
     public static void main( String[] args ) {
 
@@ -77,17 +57,5 @@ public class TraitExample {
         run( "traitsMixins.drl" );
 
         run( "traitsShed.drl" );
-
-
     }
-
-
-
-
-
-
-
-
-
-
 }

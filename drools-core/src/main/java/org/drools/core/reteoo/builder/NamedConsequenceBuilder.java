@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,15 +61,16 @@ public class NamedConsequenceBuilder implements ReteooComponentBuilder {
         GroupElement subrule = (GroupElement) context.peek();
 
         ActivationListenerFactory factory = context.getKnowledgeBase().getConfiguration().getActivationListenerFactory( rule.getActivationListener() );
+
+        context.setConsequenceName( namedConsequence.getConsequenceName() );
         TerminalNode terminal = factory.createActivationListener( context.getNextId(),
                                                                   context.getTupleSource(),
                                                                   rule,
                                                                   subrule,
                                                                   0, // subruleIndex,
                                                                   context );
+        context.setConsequenceName( null );
 
-        RuleTerminalNode terminalNode = (RuleTerminalNode) terminal;
-        ((RuleTerminalNode) terminal).setConsequenceName( namedConsequence.getConsequenceName() );
-        return terminalNode;
+        return (RuleTerminalNode) terminal;
     }
 }

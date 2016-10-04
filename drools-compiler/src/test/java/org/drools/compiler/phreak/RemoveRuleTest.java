@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import static junit.framework.Assert.assertEquals;
 import static junit.framework.TestCase.assertNotSame;
 import static junit.framework.TestCase.assertSame;
 import static org.junit.Assert.*;
@@ -74,11 +75,11 @@ public class RemoveRuleTest {
         wm.setGlobal("list", list);
 
         ObjectTypeNode aotn = getObjectTypeNode(kbase, A.class );
-        LeftInputAdapterNode liaNode = (LeftInputAdapterNode) aotn.getSinkPropagator().getSinks()[0];
+        LeftInputAdapterNode liaNode = (LeftInputAdapterNode) aotn.getObjectSinkPropagator().getSinks()[0];
 
         LiaNodeMemory lm = ( LiaNodeMemory ) wm.getNodeMemory(liaNode);
         SegmentMemory sm = lm.getSegmentMemory();
-        assertEquals(1, sm.getStagedLeftTuples().insertSize());
+        assertNotNull(sm.getStagedLeftTuples().getInsertFirst());
 
         wm.fireAllRules();
 
@@ -91,9 +92,9 @@ public class RemoveRuleTest {
         assertEquals( 1, eMem.getRightTupleMemory().size() );
 
         NodeMemories nms = wm.getNodeMemories();
-        assertEquals( 13, countNodeMemories(nms));
+        assertEquals( 12, countNodeMemories(nms));
 
-        assertEquals(0, sm.getStagedLeftTuples().insertSize());
+        assertNull(sm.getStagedLeftTuples().getInsertFirst());
         assertEquals(1, list.size() );
 
         assertEquals( "r1", ((Match)list.get(0)).getRule().getName() );
@@ -101,12 +102,6 @@ public class RemoveRuleTest {
         kbase.removeRule("org.kie", "r1");
 
         assertEquals( 6, countNodeMemories(nms)); // still has OTN
-
-        assertEquals( 0, bMem.getLeftTupleMemory().size() );
-        assertEquals( 0, bMem.getRightTupleMemory().size() );
-
-        assertEquals( 0, eMem.getLeftTupleMemory().size() );
-        assertEquals( 0, eMem.getRightTupleMemory().size() );
     }
 
     @Test
@@ -130,19 +125,10 @@ public class RemoveRuleTest {
         List list = new ArrayList();
         wm.setGlobal("list", list);
 
-        ObjectTypeNode aotn = getObjectTypeNode(kbase, A.class );
-        LeftInputAdapterNode liaNode = (LeftInputAdapterNode) aotn.getSinkPropagator().getSinks()[0];
-
-        LiaNodeMemory lm = ( LiaNodeMemory ) wm.getNodeMemory(liaNode);
-        SegmentMemory sm = lm.getSegmentMemory();
-        SegmentMemory subSm = sm.getFirst();
-        SegmentMemory mainSm = subSm.getNext();
-
         wm.fireAllRules();
         assertEquals(2, list.size() );
         assertEquals( "r1", ((Match)list.get(0)).getRule().getName() );
         assertEquals( "r1", ((Match)list.get(1)).getRule().getName() );
-
 
         kbase.removeRule("org.kie", "r1");
         wm.insert(new A(1));
@@ -179,13 +165,13 @@ public class RemoveRuleTest {
         wm.insert(new E(1));
         wm.fireAllRules();
 
-        assertEquals( 8, countNodeMemories(wm.getNodeMemories()));
+        assertEquals( 7, countNodeMemories(wm.getNodeMemories()));
 
         kbase1.addKnowledgePackages( buildKnowledgePackage("r2", "   a : A() B() C(2;) D() E()\n") );
         wm.fireAllRules();
 
         ObjectTypeNode aotn = getObjectTypeNode(kbase1, A.class );
-        LeftInputAdapterNode liaNode = (LeftInputAdapterNode) aotn.getSinkPropagator().getSinks()[0];
+        LeftInputAdapterNode liaNode = (LeftInputAdapterNode) aotn.getObjectSinkPropagator().getSinks()[0];
         JoinNode bNode = (JoinNode) liaNode.getSinkPropagator().getFirstLeftTupleSink();
 
         JoinNode c1Node = (JoinNode) bNode.getSinkPropagator().getFirstLeftTupleSink();
@@ -208,12 +194,9 @@ public class RemoveRuleTest {
 
 
         kbase1.removeRule("org.kie", "r2");
-        assertEquals( 11, countNodeMemories(wm.getNodeMemories()));
+        assertEquals( 10, countNodeMemories(wm.getNodeMemories()));
 
         assertNull( sm.getFirst());
-
-        assertEquals( 0, c2Mem.getLeftTupleMemory().size() );
-        assertEquals( 0, c2Mem.getRightTupleMemory().size() );
 
         assertSame( sm, c1Mem.getSegmentMemory()); // c1SMem repoints back to original Smem
 
@@ -242,13 +225,13 @@ public class RemoveRuleTest {
         wm.insert(new E(1));
         wm.fireAllRules();
 
-        assertEquals( 8, countNodeMemories(wm.getNodeMemories()));
+        assertEquals( 7, countNodeMemories(wm.getNodeMemories()));
 
         kbase1.addKnowledgePackages( buildKnowledgePackage("r2", "   a:A() B() eval(1==1) eval(1==1) C(2;) \n") );
         wm.fireAllRules();
 
         ObjectTypeNode aotn = getObjectTypeNode(kbase1, A.class );
-        LeftInputAdapterNode liaNode = (LeftInputAdapterNode) aotn.getSinkPropagator().getSinks()[0];
+        LeftInputAdapterNode liaNode = (LeftInputAdapterNode) aotn.getObjectSinkPropagator().getSinks()[0];
         JoinNode bNode = (JoinNode) liaNode.getSinkPropagator().getFirstLeftTupleSink();
 
         EvalConditionNode e1 = (EvalConditionNode) bNode.getSinkPropagator().getFirstLeftTupleSink();
@@ -274,12 +257,9 @@ public class RemoveRuleTest {
 
 
         kbase1.removeRule("org.kie", "r2");
-        assertEquals( 9, countNodeMemories(wm.getNodeMemories()));
+        assertEquals( 8, countNodeMemories(wm.getNodeMemories()));
 
         assertNull( sm.getFirst());
-
-        assertEquals( 0, c2Mem.getLeftTupleMemory().size() );
-        assertEquals( 0, c2Mem.getRightTupleMemory().size() );
 
         assertSame( sm, c1Mem.getSegmentMemory()); // c1SMem repoints back to original Smem
 
@@ -308,14 +288,14 @@ public class RemoveRuleTest {
 
         wm.fireAllRules();
         assertEquals( 3, list.size() );
-        assertEquals( 8, countNodeMemories(wm.getNodeMemories()));
+        assertEquals( 7, countNodeMemories(wm.getNodeMemories()));
 
         kbase1.addKnowledgePackages( buildKnowledgePackage("r2", "   a : A() B(2;) C() D() E()\n") );
         wm.fireAllRules();
-        assertEquals( 19, countNodeMemories(wm.getNodeMemories()));
+        assertEquals( 17, countNodeMemories(wm.getNodeMemories()));
 
         ObjectTypeNode aotn = getObjectTypeNode(kbase1, A.class );
-        LeftInputAdapterNode liaNode = (LeftInputAdapterNode) aotn.getSinkPropagator().getSinks()[0];
+        LeftInputAdapterNode liaNode = (LeftInputAdapterNode) aotn.getObjectSinkPropagator().getSinks()[0];
         JoinNode b1Node = (JoinNode) liaNode.getSinkPropagator().getFirstLeftTupleSink();
         JoinNode b2Node = (JoinNode) liaNode.getSinkPropagator().getLastLeftTupleSink();
         JoinNode c1Node = (JoinNode) b1Node.getSinkPropagator().getLastLeftTupleSink();
@@ -341,10 +321,10 @@ public class RemoveRuleTest {
 
         wm.fireAllRules();
         assertEquals(6, list.size() );
-        assertEquals( 19, countNodeMemories(wm.getNodeMemories()));
+        assertEquals( 17, countNodeMemories(wm.getNodeMemories()));
 
         kbase1.removeRule("org.kie", "r2");
-        assertEquals( 13, countNodeMemories(wm.getNodeMemories()));
+        assertEquals( 12, countNodeMemories(wm.getNodeMemories()));
 
         assertSame( sm, b1Mem.getSegmentMemory());
         assertSame( sm, c1Mem.getSegmentMemory());
@@ -354,8 +334,6 @@ public class RemoveRuleTest {
 
         //SegmentMemory b2Smem =  sm.getFirst().remove();
         assertSame( b2Smem, b2Mem.getSegmentMemory());
-        assertEquals( 0, b2Mem.getLeftTupleMemory().size() );
-        assertEquals( 0, b2Mem.getRightTupleMemory().size() );
 
         wm.insert(new A(1));
         wm.fireAllRules();
@@ -596,6 +574,46 @@ public class RemoveRuleTest {
 
         wm.fireAllRules();
         assertEquals( 4, list.size() );
+    }
+
+    @Test
+    public void testPathMemorySizeAfterSegmentMerge() throws Exception {
+        KnowledgeBase kbase1 = buildKnowledgeBase("r1", "   A(1;) B(1;)\n" );
+        kbase1.addKnowledgePackages( buildKnowledgePackage("r2", "   A(1;)\n") );
+        InternalWorkingMemory wm = ((InternalWorkingMemory)kbase1.newStatefulKnowledgeSession());
+        List list = new ArrayList();
+        wm.setGlobal("list", list);
+
+        // trigger segment initialization
+        wm.insert(new A(1));
+        wm.insert(new B(1));
+        wm.fireAllRules();
+
+        RuleTerminalNode rtn1 = getRtn( "org.kie.r1", kbase1 );
+        RuleTerminalNode rtn2 = getRtn( "org.kie.r2", kbase1 );
+
+        assertEquals( 2, wm.getNodeMemory(rtn1).getSegmentMemories().length );
+        assertEquals( 2, wm.getNodeMemory(rtn2).getSegmentMemories().length );
+
+        kbase1.removeRule("org.kie", "r2");
+        assertEquals( 1, wm.getNodeMemory(rtn1).getSegmentMemories().length );
+    }
+
+    @Test
+    public void testPathMemorySizeAfterSegmentMergeNonInitialized() throws Exception {
+        KnowledgeBase kbase1 = buildKnowledgeBase("r1", "   A(1;) B(1;)\n" );
+        kbase1.addKnowledgePackages( buildKnowledgePackage("r2", "   A(1;)\n") );
+
+        InternalWorkingMemory wm = ((InternalWorkingMemory)kbase1.newStatefulKnowledgeSession());
+
+        RuleTerminalNode rtn1 = getRtn( "org.kie.r1", kbase1 );
+        RuleTerminalNode rtn2 = getRtn( "org.kie.r2", kbase1 );
+
+        assertEquals( 2, wm.getNodeMemory(rtn1).getSegmentMemories().length );
+        assertEquals( 2, wm.getNodeMemory(rtn2).getSegmentMemories().length );
+
+        kbase1.removeRule("org.kie", "r2");
+        assertEquals( 1, wm.getNodeMemory(rtn1).getSegmentMemories().length );
     }
 
     @Test

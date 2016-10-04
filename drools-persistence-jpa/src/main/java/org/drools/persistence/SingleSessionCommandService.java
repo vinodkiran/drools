@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import org.drools.core.command.runtime.UnpersistableCommand;
 import org.drools.core.common.EndOperationListener;
 import org.drools.core.common.InternalKnowledgeRuntime;
 import org.drools.core.common.InternalWorkingMemory;
+import org.drools.core.marshalling.impl.KieSessionInitializer;
 import org.drools.core.marshalling.impl.MarshallingConfigurationImpl;
 import org.drools.core.runtime.process.InternalProcessRuntime;
 import org.drools.core.time.impl.CommandServiceTimerJobFactoryManager;
@@ -35,7 +36,6 @@ import org.drools.core.time.impl.TimerJobFactoryManager;
 import org.drools.persistence.info.SessionInfo;
 import org.drools.persistence.jpa.JpaPersistenceContextManager;
 import org.drools.persistence.jpa.processinstance.JPAWorkItemManager;
-import org.drools.persistence.jta.JtaTransactionManager;
 import org.kie.api.KieBase;
 import org.kie.api.command.BatchExecutionCommand;
 import org.kie.api.command.Command;
@@ -120,7 +120,7 @@ public class SingleSessionCommandService
         }
 
         // update the session id to be the same as the session info id
-        ((InternalKnowledgeRuntime) ksession).setId( this.sessionInfo.getId());
+        ((InternalKnowledgeRuntime) ksession).setIdentifier( this.sessionInfo.getId());
     }
 
     protected void initNewKnowledgeSession(KieBase kbase, KieSessionConfiguration conf) { 
@@ -187,7 +187,7 @@ public class SingleSessionCommandService
             // do not rollback transaction otherwise it will mark it as aborted
             // making the whole operation to fail  if not transaction owner
             if (transactionOwner) {
-                rollbackTransaction( e, transactionOwner );
+                rollbackTransaction( e, transactionOwner, false );
             }
             throw e;
 
@@ -239,21 +239,11 @@ public class SingleSessionCommandService
         this.sessionInfo.setJPASessionMashallingHelper(this.marshallingHelper);
 
         // if this.ksession is null, it'll create a new one, else it'll use the existing one
-        this.ksession = this.marshallingHelper.loadSnapshot( this.sessionInfo.getData(), this.ksession );
-
-        InternalKnowledgeRuntime kruntime = ((InternalKnowledgeRuntime) ksession);
-
-        // The CommandService for the TimerJobFactoryManager must be set before any timer jobs are scheduled.
-        // Otherwise, if overdue jobs are scheduled (and then run before the .commandService field can be set),
-        //  they will retrieve a null commandService (instead of a reference to this) and fail.
-        TimerJobFactoryManager timerJobFactoryManager = ((InternalKnowledgeRuntime) ksession ).getTimerService().getTimerJobFactoryManager();
-        if (timerJobFactoryManager instanceof CommandServiceTimerJobFactoryManager) {
-            ( (CommandServiceTimerJobFactoryManager) timerJobFactoryManager ).setCommandService( this );
-        }
+        this.ksession = this.marshallingHelper.loadSnapshot( this.sessionInfo.getData(), this.ksession, new JpaSessionInitializer(this) );
 
         // update the session id to be the same as the session info id
-        kruntime.setId( this.sessionInfo.getId() );
-
+        InternalKnowledgeRuntime kruntime = ((InternalKnowledgeRuntime) ksession);
+        kruntime.setIdentifier( this.sessionInfo.getId() );
         kruntime.setEndOperationListener( new EndOperationListenerImpl( this.txm, this.sessionInfo ) );
 
         if ( this.kContext == null ) {
@@ -272,6 +262,26 @@ public class SingleSessionCommandService
             addInterceptor(iterator.next(), false);
         }
 
+    }
+
+    public class JpaSessionInitializer implements KieSessionInitializer {
+
+        private final SingleSessionCommandService commandService;
+
+        public JpaSessionInitializer( SingleSessionCommandService commandService ) {
+            this.commandService = commandService;
+        }
+
+        @Override
+        public void init( KieSession ksession ) {
+            // The CommandService for the TimerJobFactoryManager must be set before any timer jobs are scheduled.
+            // Otherwise, if overdue jobs are scheduled (and then run before the .commandService field can be set),
+            //  they will retrieve a null commandService (instead of a reference to this) and fail.
+            TimerJobFactoryManager timerJobFactoryManager = ((InternalKnowledgeRuntime) ksession ).getTimerService().getTimerJobFactoryManager();
+            if (timerJobFactoryManager instanceof CommandServiceTimerJobFactoryManager) {
+                ( (CommandServiceTimerJobFactoryManager) timerJobFactoryManager ).setCommandService( commandService );
+            }
+        }
     }
 
     public void initTransactionManager(Environment env) {
@@ -312,9 +322,7 @@ public class SingleSessionCommandService
                 }
             } else {
                 logger.debug( "Instantiating JtaTransactionManager" );
-                this.txm = new JtaTransactionManager( env.get( EnvironmentName.TRANSACTION ),
-                                                      env.get( EnvironmentName.TRANSACTION_SYNCHRONIZATION_REGISTRY ),
-                                                      tm );
+                this.txm = TransactionManagerFactory.get().newTransactionManager(env);
                 env.set( EnvironmentName.TRANSACTION_MANAGER, this.txm );
                 try {
                     Class< ? > jpaPersistenceCtxMngrClass = Class.forName( "org.jbpm.persistence.JpaProcessPersistenceContextManager" );
@@ -377,17 +385,25 @@ public class SingleSessionCommandService
         return commandService.execute(command);
     }
 
-    private void rollbackTransaction(Exception t1,
-                                     boolean transactionOwner) {
+    private void rollbackTransaction(Exception t1, boolean transactionOwner) {
+        rollbackTransaction(t1, transactionOwner, true);
+    }
+
+    private void rollbackTransaction(Exception cause, boolean transactionOwner, boolean logstack) {
         try {
-            logger.warn( "Could not commit session",
-                          t1 );
+
+            if (logstack) {
+                logger.warn( "Could not commit session", cause );
+            } else {
+                logger.warn( "Could not commit session due to {}", cause.getMessage() );
+            }
             txm.rollback( transactionOwner );
-        } catch ( Exception t2 ) {
-            logger.error( "Could not rollback",
-                          t2 );
-            throw new RuntimeException( "Could not commit session or rollback",
-                                        t2 );
+        } catch ( Exception rollbackError ) {
+            String errorMessage = "Could not rollback due to '" + rollbackError.getMessage() + "' rollback caused by " + cause.getMessage();
+            // log rollback exception
+            logger.error( "Could not rollback", rollbackError );
+            // propagate original exception that caused the rollback
+            throw new RuntimeException( errorMessage, cause );
         }
     }
 

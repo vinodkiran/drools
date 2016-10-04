@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,7 +120,7 @@ public class ReteConditionalBranchNode extends ConditionalBranchNode {
 
         if ( wasPropagated ) {
             LeftTupleSink mainSink = this.sink.getSinks()[0];
-            LeftTupleSink oldSink = leftTuple.getFirstChild().getSink();
+            LeftTupleSink oldSink = leftTuple.getFirstChild().getTupleSink();
 
             if ( conditionalExecution != null ) {
                 LeftTupleSink newSink = conditionalExecution.getSink().getSinks()[0];
@@ -223,7 +223,7 @@ public class ReteConditionalBranchNode extends ConditionalBranchNode {
 
                 while ( childLeftTuple != null && childLeftTuple.getRightParent() == rightParent ) {
                     // skip to the next child that has a different right parent
-                    childLeftTuple = childLeftTuple.getLeftParentNext();
+                    childLeftTuple = childLeftTuple.getHandleNext();
                 }
             }
         }

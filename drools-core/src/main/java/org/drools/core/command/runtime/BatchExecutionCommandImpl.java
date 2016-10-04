@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,31 +40,14 @@ import org.kie.api.runtime.ExecutionResults;
 import com.thoughtworks.xstream.annotations.XStreamAsAttribute;
 
 
+
 /**
  * <p>Java class for BatchExecutionCommand complex type.
- * 
- * <p>The following schema fragment specifies the expected content contained within this class.
- * 
- * <pre>
- * &lt;complexType name="BatchExecutionCommand">
- *   &lt;complexContent>
- *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
- *       &lt;choice maxOccurs="unbounded">
- *         &lt;element name="abort-work-item" type="{http://drools.org/drools-5.0/knowledge-session}AbortWorkItemCommand"/>
- *         &lt;element name="complete-work-item" type="{http://drools.org/drools-5.0/knowledge-session}CompleteWorkItemCommand"/>
- *         &lt;element name="fire-all-rules" type="{http://drools.org/drools-5.0/knowledge-session}FireAllRulesCommand"/>
- *         &lt;element name="get-global" type="{http://drools.org/drools-5.0/knowledge-session}GetGlobalCommand"/>
- *         &lt;element name="insert" type="{http://drools.org/drools-5.0/knowledge-session}InsertObjectCommand"/>
- *         &lt;element name="insert-elements" type="{http://drools.org/drools-5.0/knowledge-session}InsertElementsCommand"/>
- *         &lt;element name="query" type="{http://drools.org/drools-5.0/knowledge-session}QueryCommand"/>
- *         &lt;element name="set-global" type="{http://drools.org/drools-5.0/knowledge-session}SetGlobalCommand"/>
- *         &lt;element name="signal-event" type="{http://drools.org/drools-5.0/knowledge-session}SignalEventCommand"/>
- *         &lt;element name="start-process" type="{http://drools.org/drools-5.0/knowledge-session}StartProcessCommand"/>
- *       &lt;/choice>
- *     &lt;/restriction>
- *   &lt;/complexContent>
- * &lt;/complexType>
- * </pre>
+ *
+ * DO NOT ADD NEW COMMANDS TO THIS CLASS
+ * WITHOUT THOROUGHLY TESTING
+ * 1. THE SERIALIZATION OF THOSE COMMANDS
+ * 2. THE INTEGRATION OF THOSE COMMANDS IN THE REST AND WS/SOAP IMPLEMENTATIONS!
  */
 @XmlRootElement(name="batch-execution")
 @XmlAccessorType(XmlAccessType.FIELD)
@@ -76,18 +59,6 @@ public class BatchExecutionCommandImpl implements BatchExecutionCommand, Generic
     @XmlAttribute
     @XStreamAsAttribute
     private String lookup;
-
-    public BatchExecutionCommandImpl(){
-    }
-
-    public BatchExecutionCommandImpl( List<GenericCommand<?>> commands ) {
-        this.commands = commands;
-    }
-
-    public BatchExecutionCommandImpl( List<GenericCommand<?>> commands, String lookup ) {
-        this.commands = commands;
-        this.lookup = lookup;
-    }
 
     @XmlElements({
                          @XmlElement(name = "abort-work-item", type = AbortWorkItemCommand.class),
@@ -102,15 +73,30 @@ public class BatchExecutionCommandImpl implements BatchExecutionCommand, Generic
                          @XmlElement(name = "modify", type = ModifyCommand.class),
                          @XmlElement(name = "get-object", type = GetObjectCommand.class),
                          @XmlElement(name = "fire-all-rules", type = FireAllRulesCommand.class),
+                         @XmlElement(name = "fire-until-halt", type = FireUntilHaltCommand.class),
                          @XmlElement(name = "complete-work-item", type = CompleteWorkItemCommand.class),
                          @XmlElement(name = "get-objects", type = GetObjectsCommand.class),
                          @XmlElement(name = "set-focus", type = AgendaGroupSetFocusCommand.class),
                          @XmlElement(name = "clear-activation-group", type = ClearActivationGroupCommand.class),
                          @XmlElement(name = "clear-agenda", type = ClearAgendaCommand.class),
                          @XmlElement(name = "clear-agenda-group", type = ClearAgendaGroupCommand.class),
-                         @XmlElement(name = "clear-ruleflow-group", type = ClearRuleFlowGroupCommand.class)
+                         @XmlElement(name = "clear-ruleflow-group", type = ClearRuleFlowGroupCommand.class),
+                         @XmlElement(name = "get-fact-handles", type = GetFactHandlesCommand.class)
                  })
     protected List<GenericCommand<?>> commands;
+
+    public BatchExecutionCommandImpl() {
+        // JAXB constructor
+    }
+
+    public BatchExecutionCommandImpl( List<GenericCommand<?>> commands ) {
+        this.commands = commands;
+    }
+
+    public BatchExecutionCommandImpl( List<GenericCommand<?>> commands, String lookup ) {
+        this.commands = commands;
+        this.lookup = lookup;
+    }
 
     /**
      * Gets the value of the abortWorkItemOrCompleteWorkItemOrFireAllRules property.

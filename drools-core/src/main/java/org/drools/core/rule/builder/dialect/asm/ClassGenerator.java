@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -174,6 +174,14 @@ public class ClassGenerator {
         }
     }
 
+    public <T> T newInstance(Class paramType1, Object param1, Class paramType2, Object param2) {
+        try {
+            return (T)generateClass().getConstructor(paramType1, paramType2).newInstance(param1, param2);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     // Accessors
 
     public String getClassDescriptor() {
@@ -275,7 +283,15 @@ public class ClassGenerator {
         return arrayPrefix + typeDescriptor;
     }
 
-    private String[] toInteralNames(Class<?>[] classes) {
+    public String getClassName() {
+        return className;
+    }
+
+    public String getInternalClassName() {
+        return toInteralName(className);
+    }
+
+    private String[] toInteralNames( Class<?>[] classes ) {
         if (classes == null) return null;
         String[] internals = new String[classes.length];
         for (int i = 0; i < classes.length; i++) internals[i] = toInteralName(classes[i]);
@@ -629,6 +645,8 @@ public class ClassGenerator {
             if (from.isPrimitive()) {
                 if (to.isPrimitive()) {
                     castPrimitiveToPrimitive(from, to);
+                } else if (to == Object.class) {
+                    castFromPrimitive(from);
                 } else {
                     Class toPrimitive = convertToPrimitiveType(to);
                     castPrimitiveToPrimitive(convertToPrimitiveType(from), toPrimitive);

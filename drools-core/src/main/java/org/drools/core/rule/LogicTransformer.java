@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,10 +111,10 @@ public class LogicTransformer {
                 if (child instanceof NamedConsequence) {
                     GroupElement clonedAnd = GroupElementFactory.newAndInstance();
                     for (int j = 0; j < i; j++) {
-                        clonedAnd.getChildren().add(children.get(j).clone());
+                        clonedAnd.addChild(children.get(j).clone());
                     }
                     ((NamedConsequence) child).setTerminal(true);
-                    clonedAnd.getChildren().add(child);
+                    clonedAnd.addChild(child);
                     children.remove(i--);
                     result.add(clonedAnd);
                 }
@@ -186,7 +186,6 @@ public class LogicTransformer {
             }
             Accumulate accumulate = (Accumulate)element;
             replaceDeclarations( resolver, accumulate );
-            accumulate.resetInnerDeclarationCache();
 
         } else if ( element instanceof From ) {
             DataProvider provider = ((From) element).getDataProvider();
@@ -209,7 +208,7 @@ public class LogicTransformer {
         } else if ( element instanceof QueryElement ) {
             QueryElement qe = ( QueryElement ) element;
             Pattern pattern = qe.getResultPattern();
-            
+
             for ( Entry<String, Declaration> entry : pattern.getInnerDeclarations().entrySet() ) {
                 Declaration resolved = resolver.getDeclaration( null,
                                                                 entry.getValue().getIdentifier() );
@@ -219,26 +218,29 @@ public class LogicTransformer {
             }
 
             List<Integer> varIndexes = asList( qe.getVariableIndexes() );
-            for ( int i = 0; i < qe.getDeclIndexes().length; i++ ) {
-                Declaration declr = (Declaration) qe.getArgTemplate()[qe.getDeclIndexes()[i]];
+            for (int i = 0; i < qe.getArguments().length; i++) {
+                if (!(qe.getArguments()[i] instanceof QueryArgument.Declr)) {
+                    continue;
+                }
+                Declaration declr = ((QueryArgument.Declr) qe.getArguments()[i]).getDeclaration();
                 Declaration resolved = resolver.getDeclaration( null,
                                                                 declr.getIdentifier() );
-                if ( resolved != null && resolved != declr && resolved.getPattern() != pattern ) {
-                    qe.getArgTemplate()[qe.getDeclIndexes()[i]] = resolved;
+                if ( resolved != declr && resolved.getPattern() != pattern ) {
+                    qe.getArguments()[i] = new QueryArgument.Declr(resolved);
                 }
-                
+
                 if( ClassObjectType.DroolsQuery_ObjectType.isAssignableFrom( resolved.getPattern().getObjectType() ) ) {
                     // if the resolved still points to DroolsQuery, we know this is the first unification pattern, so redeclare it as the visible Declaration
                     declr = pattern.addDeclaration( declr.getIdentifier() );
 
                     // this bit is different, notice its the ArrayElementReader that we wire up to, not the declaration.
-                    ArrayElementReader reader = new ArrayElementReader( new SelfReferenceClassFieldReader(Object[].class, "this"),
-                                                                        qe.getDeclIndexes()[i],
+                    ArrayElementReader reader = new ArrayElementReader( new SelfReferenceClassFieldReader(Object[].class),
+                                                                        i,
                                                                         resolved.getDeclarationClass() );
                     declr.setReadAccessor( reader );
-                    
-                    varIndexes.add( qe.getDeclIndexes()[i] );
-                }                  
+
+                    varIndexes.add( i );
+                }
             }
             qe.setVariableIndexes( toIntArray( varIndexes ) );
 
@@ -317,7 +319,7 @@ public class LogicTransformer {
         return list;
     }
 
-    private static int[] toIntArray(List<Integer> list) {
+    public static int[] toIntArray(List<Integer> list) {
         int[] ints = new int[list.size()];
         for ( int i = 0; i < list.size(); i++ ) {
             ints[i] = list.get( i );
@@ -467,8 +469,7 @@ public class LogicTransformer {
                 for ( int j = orsList.size() - 1; j >= 0; j-- ) {
                     GroupElement or = orsList.get(j);
                     // we must insert at the beginning to keep the order
-                    and.getChildren().add(0,
-                                          or.getChildren().get(indexes[j]).clone());
+                    and.addChild( 0, or.getChildren().get(indexes[j]).clone() );
                     if ( (i % mod) == 0 ) {
                         indexes[j] = (indexes[j] + 1) % or.getChildren().size();
                     }
@@ -482,7 +483,7 @@ public class LogicTransformer {
                         // always add clone of them to avoid offset conflicts in declarations
 
                         // HERE IS THE MESSY PROBLEM: need to change further references to the appropriate cloned ref
-                        and.getChildren().add( j, others[j].clone() );
+                        and.addChild( j, others[j].clone() );
                     }
                 }
                 parent.addChild( and );

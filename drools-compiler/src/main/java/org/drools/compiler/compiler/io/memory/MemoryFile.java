@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,12 @@ import org.drools.core.util.StringUtils;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Serializable;
 
 import static org.drools.core.util.IoUtils.readBytesFromInputStream;
 
-public class MemoryFile implements File {
+public class MemoryFile implements File,
+                                   Serializable {
     private String name;
     private Folder folder;
     private MemoryFileSystem mfs;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@ package org.drools.core.common;
 
 import org.drools.core.impl.StatefulKnowledgeSessionImpl;
 import org.drools.core.phreak.RuleAgendaItem;
-import org.drools.core.reteoo.LeftTuple;
 import org.drools.core.spi.Activation;
+import org.drools.core.spi.Tuple;
 import org.drools.core.util.Iterator;
-import org.drools.core.util.index.LeftTupleList;
+import org.drools.core.util.index.TupleList;
 import org.kie.internal.runtime.StatefulKnowledgeSession;
 
 import java.util.ArrayList;
@@ -29,7 +29,6 @@ import java.util.List;
 public class PhreakActiveActivationIterator
     implements
     Iterator {
-    private InternalAgenda     agenda;
 
     List<AgendaItem> items;
 
@@ -40,13 +39,13 @@ public class PhreakActiveActivationIterator
     }
 
     private PhreakActiveActivationIterator(InternalWorkingMemory wm) {
-        agenda = (InternalAgenda) wm.getAgenda();
+        InternalAgenda agenda = wm.getAgenda();
         items = new ArrayList<AgendaItem>();
         for ( InternalAgendaGroup group : agenda.getAgendaGroupsMap().values() ) {
             for ( Activation act : group.getActivations() ) {
                 RuleAgendaItem item = ( RuleAgendaItem ) act;
-                LeftTupleList list =  item.getRuleExecutor().getLeftTupleList();
-                for ( LeftTuple lt = list.getFirst(); lt != null; lt = (LeftTuple) lt.getNext() ) {
+                TupleList list =  item.getRuleExecutor().getLeftTupleList();
+                for ( Tuple lt = list.getFirst(); lt != null; lt = lt.getNext() ) {
                     items.add( (AgendaItem) lt );
                 }
             }

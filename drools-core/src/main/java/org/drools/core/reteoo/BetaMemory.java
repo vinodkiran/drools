@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,19 +18,19 @@ package org.drools.core.reteoo;
 
 import org.drools.core.common.InternalWorkingMemory;
 import org.drools.core.common.Memory;
-import org.drools.core.common.RightTupleSets;
-import org.drools.core.common.RightTupleSetsImpl;
+import org.drools.core.common.TupleSets;
+import org.drools.core.common.TupleSetsImpl;
 import org.drools.core.rule.ContextEntry;
 import org.drools.core.util.AbstractBaseLinkedListNode;
 
 public class BetaMemory extends AbstractBaseLinkedListNode<Memory>
         implements
-        Memory {
+        SegmentNodeMemory {
 
     private static final long serialVersionUID = 510l;
-    private LeftTupleMemory            leftTupleMemory;
-    private RightTupleMemory           rightTupleMemory;
-    private RightTupleSets             stagedRightTuples;
+    private TupleMemory                leftTupleMemory;
+    private TupleMemory                rightTupleMemory;
+    private TupleSets<RightTuple>      stagedRightTuples;
     private ContextEntry[]             context;
     // the node type this memory belongs to
     private short                      nodeType;
@@ -42,30 +42,30 @@ public class BetaMemory extends AbstractBaseLinkedListNode<Memory>
     public BetaMemory() {
     }
 
-    public BetaMemory(final LeftTupleMemory tupleMemory,
-                      final RightTupleMemory objectMemory,
+    public BetaMemory(final TupleMemory tupleMemory,
+                      final TupleMemory objectMemory,
                       final ContextEntry[] context,
                       final short nodeType) {
         this.leftTupleMemory = tupleMemory;
         this.rightTupleMemory = objectMemory;
-        this.stagedRightTuples = new RightTupleSetsImpl(this);
+        this.stagedRightTuples = new TupleSetsImpl<RightTuple>();
         this.context = context;
         this.nodeType = nodeType;
     }
 
-    public RightTupleSets getStagedRightTuples() {
+    public TupleSets<RightTuple> getStagedRightTuples() {
         return stagedRightTuples;
     }
 
-    public void setStagedRightTuples(RightTupleSets stagedRightTuples) {
+    public void setStagedRightTuples(TupleSets<RightTuple> stagedRightTuples) {
         this.stagedRightTuples = stagedRightTuples;
     }
 
-    public RightTupleMemory getRightTupleMemory() {
+    public TupleMemory getRightTupleMemory() {
         return this.rightTupleMemory;
     }
 
-    public LeftTupleMemory getLeftTupleMemory() {
+    public TupleMemory getLeftTupleMemory() {
         return this.leftTupleMemory;
     }
 
@@ -84,16 +84,14 @@ public class BetaMemory extends AbstractBaseLinkedListNode<Memory>
         return context;
     }
 
-    public void linkNode(InternalWorkingMemory wm) {
-        linkNode(wm, true);
+    public boolean linkNode(InternalWorkingMemory wm) {
+        return linkNode(wm, true);
     }
 
-    public void linkNode(InternalWorkingMemory wm, boolean notify) {
-        if (notify) {
-            segmentMemory.linkNode(nodePosMaskBit, wm);
-        } else {
-            segmentMemory.linkNodeWithoutRuleNotify(nodePosMaskBit);
-        }
+    public boolean linkNode(InternalWorkingMemory wm, boolean notify) {
+        return notify ?
+               segmentMemory.linkNode(nodePosMaskBit, wm) :
+               segmentMemory.linkNodeWithoutRuleNotify(nodePosMaskBit);
     }
 
     public void unlinkNode(InternalWorkingMemory wm) {
@@ -136,16 +134,14 @@ public class BetaMemory extends AbstractBaseLinkedListNode<Memory>
         return counter--;
     }
 
-    public void setNodeDirty(InternalWorkingMemory wm) {
-        setNodeDirty(wm, true);
+    public boolean setNodeDirty(InternalWorkingMemory wm) {
+        return setNodeDirty(wm, true);
     }
 
-    public void setNodeDirty(InternalWorkingMemory wm, boolean notify) {
-        if (notify) {
-            segmentMemory.notifyRuleLinkSegment(wm, nodePosMaskBit);
-        } else {
-            segmentMemory.linkSegmentWithoutRuleNotify(wm, nodePosMaskBit);
-        }
+    public boolean setNodeDirty(InternalWorkingMemory wm, boolean notify) {
+        return notify ?
+               segmentMemory.notifyRuleLinkSegment(wm, nodePosMaskBit) :
+               segmentMemory.linkSegmentWithoutRuleNotify(wm, nodePosMaskBit);
     }
 
     public void setNodeDirtyWithoutNotify() {

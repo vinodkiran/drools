@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import org.drools.core.base.mvel.MVELCompileable;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalWorkingMemory;
 import org.drools.core.definitions.rule.impl.RuleImpl;
-import org.drools.core.reteoo.LeftTuple;
 import org.drools.core.rule.Declaration;
 import org.drools.core.rule.MVELDialectRuntimeData;
 import org.drools.core.spi.MvelAccumulator;
@@ -112,13 +111,13 @@ public class MVELAccumulatorFunctionExecutor
      */
     public void accumulate(Object workingMemoryContext,
                            Object context,
-                           Tuple leftTuple,
+                           Tuple tuple,
                            InternalFactHandle handle,
                            Declaration[] declarations,
                            Declaration[] innerDeclarations,
                            WorkingMemory workingMemory) throws Exception {
         
-        VariableResolverFactory factory = unit.getFactory( null, null, null, handle, (LeftTuple) leftTuple, null, (InternalWorkingMemory) workingMemory, workingMemory.getGlobalResolver()  );
+        VariableResolverFactory factory = unit.getFactory( null, null, null, handle, tuple, null, (InternalWorkingMemory) workingMemory, workingMemory.getGlobalResolver()  );
         
         final Object value = MVEL.executeExpression( this.expression,
                                                      handle.getObject(),

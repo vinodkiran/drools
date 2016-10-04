@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,12 +41,12 @@ import java.util.Map;
 import java.util.concurrent.locks.Lock;
 
 public interface InternalWorkingMemory
-    extends WorkingMemory {
+    extends WorkingMemory, InternalWorkingMemoryEntryPoint {
 
     InternalAgenda getAgenda();
 
-    int getId();
-    void setId(Long id);
+    long getIdentifier();
+    void setIdentifier(long id);
 
     void setRuleRuntimeEventSupport(RuleRuntimeEventSupport workingMemoryEventSupport);
 
@@ -177,7 +177,7 @@ public interface InternalWorkingMemory
      * This method is called by the agenda before firing a new activation
      * to ensure the working memory is in a safe state to fire the activation.
      */
-    public void prepareToFireActivation();
+    void prepareToFireActivation();
     
     /**
      * This method is called by the agenda right after an activation was fired
@@ -203,9 +203,12 @@ public interface InternalWorkingMemory
     void addPropagation(PropagationEntry propagationEntry);
 
     void flushPropagations();
-    void flushPropagationsOnFireUntilHalt( boolean fired );
-    void flushPropagationsOnFireUntilHalt( boolean fired, PropagationEntry propagationEntry );
+    void flushPropagations(PropagationEntry propagationEntry);
     void flushNonMarshallablePropagations();
+
+    void activate();
+    void deactivate();
+    boolean tryDeactivate();
 
     void notifyEngineInactive();
 
@@ -216,5 +219,7 @@ public interface InternalWorkingMemory
 
     void removeGlobal(String identifier);
 
-    void notifyHalt();
+    void notifyWaitOnRest();
+
+    PropagationEntry handleRestOnFireUntilHalt(DefaultAgenda.ExecutionState currentState);
 }

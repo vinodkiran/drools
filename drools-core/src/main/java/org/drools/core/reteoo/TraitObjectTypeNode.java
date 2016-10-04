@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 JBoss Inc
+ * Copyright 2013 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,8 @@ import java.util.Collection;
 public class TraitObjectTypeNode extends ObjectTypeNode {
 
     private BitSet typeMask;
+
+    public TraitObjectTypeNode() { }
 
     public TraitObjectTypeNode( int id, EntryPointNode source, ObjectType objectType, BuildContext context ) {
         super( id, source, objectType, context );
@@ -134,11 +136,7 @@ public class TraitObjectTypeNode extends ObjectTypeNode {
             return;
         }
 
-        if ( dirty ) {
-            resetIdGenerator();
-            updateTupleSinkId( this, this );
-            dirty = false;
-        }
+        checkDirty();
 
         context.setObjectType( objectType );
         if ( compiledNetwork != null ) {

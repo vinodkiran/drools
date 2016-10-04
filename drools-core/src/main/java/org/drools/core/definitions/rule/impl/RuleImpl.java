@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,8 +42,8 @@ import org.drools.core.spi.Wireable;
 import org.drools.core.time.impl.Timer;
 import org.drools.core.util.StringUtils;
 import org.kie.api.definition.rule.Query;
-import org.kie.api.definition.rule.Rule;
 import org.kie.api.io.Resource;
+import org.kie.internal.definition.rule.InternalRule;
 import org.kie.internal.security.KiePolicyHelper;
 
 import java.io.Externalizable;
@@ -66,7 +66,7 @@ import java.util.Map;
 public class RuleImpl implements Externalizable,
                                  Wireable,
                                  Dialectable,
-                                 Rule,
+                                 InternalRule,
                                  Query {
 
     private static final int NO_LOOP_BIT =              1 << 0;
@@ -88,6 +88,8 @@ public class RuleImpl implements Externalizable,
 
     /** Parent Rule Name, optional */
     private RuleImpl                 parent;
+
+    private List<RuleImpl>           children;
 
     /** Salience value. */
     private Salience salience;
@@ -374,7 +376,25 @@ public class RuleImpl implements Externalizable,
     public Salience getSalience() {
         return this.salience;
     }
-
+    
+    /**
+     * Retrieve the <code>Rule</code> salience value.
+     * 
+     * @return The salience value.
+     */
+    public int getSalienceValue() {
+    	return getSalience().getValue();
+    }
+    
+    /**
+	 * Returns <code>true</code> if the rule uses dynamic salience, <code>false</code> otherwise.
+	 * 
+	 * @return <code>true</code> if the rule uses dynamic salience, else <code>false</code>.
+	 */
+    public boolean isSalienceDynamic() {
+    	return getSalience().isDynamic();
+    }
+    
     /**
      * Set the <code>Rule<code> salience.
      *
@@ -852,13 +872,33 @@ public class RuleImpl implements Externalizable,
 
     public void setParent(RuleImpl parent) {
         this.parent = parent;
+        parent.addChild( this );
     }
 
     public RuleImpl getParent() {
         return parent;
     }
 
-    public static java.util.List getMethodBytecode(Class cls, String ruleClassName, String packageName, String methodName, String resource) {
+    public void addChild(RuleImpl child) {
+        if (children == null) {
+            children = new ArrayList<RuleImpl>();
+        }
+        children.add(child);
+    }
+
+    public void removeChild(RuleImpl child) {
+        children.remove( child );
+    }
+
+    public List<RuleImpl> getChildren() {
+        return children;
+    }
+
+    public boolean hasChildren() {
+        return children != null && !children.isEmpty();
+    }
+
+    public static java.util.List getMethodBytecode( Class cls, String ruleClassName, String packageName, String methodName, String resource ) {
         org.drools.core.util.asm.MethodComparator.Tracer visit = new org.drools.core.util.asm.MethodComparator.Tracer(methodName);
 
         java.io.InputStream is = cls.getClassLoader().getResourceAsStream( resource );

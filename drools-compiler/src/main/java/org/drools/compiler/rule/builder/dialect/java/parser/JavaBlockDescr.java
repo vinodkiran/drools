@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import java.util.Map;
 public interface JavaBlockDescr {
     
     public static enum BlockType {
-        MODIFY, UPDATE, INSERT, RETRACT, DELETE, ENTRY, EXIT, CHANNEL, TRY, CATCH, FINAL, IF, ELSE, FOR, SWITCH, WHILE, THROW
+        MODIFY, UPDATE, INSERT, DELETE, ENTRY, EXIT, CHANNEL, TRY, CATCH, FINAL, IF, ELSE, FOR, SWITCH, WHILE, THROW
     }
 
     public BlockType getType();

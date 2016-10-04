@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,11 +32,7 @@ import org.drools.core.reteoo.RuleRemovalContext;
 import org.drools.core.reteoo.builder.BuildContext;
 import org.drools.core.rule.EvalCondition;
 import org.drools.core.spi.PropagationContext;
-import org.drools.core.spi.RuleComponent;
 import org.drools.core.util.Iterator;
-import org.kie.api.definition.rule.Rule;
-
-import java.util.Map.Entry;
 
 public class ReteEvalConditionNode extends EvalConditionNode {
 
@@ -156,7 +152,7 @@ public class ReteEvalConditionNode extends EvalConditionNode {
 
                     while ( childLeftTuple != null && childLeftTuple.getRightParent() == rightParent ) {
                         // skip to the next child that has a different right parent
-                        childLeftTuple = childLeftTuple.getLeftParentNext();
+                        childLeftTuple = childLeftTuple.getHandleNext();
                     }
                 }
             } else {
@@ -171,18 +167,12 @@ public class ReteEvalConditionNode extends EvalConditionNode {
     protected boolean doRemove(final RuleRemovalContext context,
                                final ReteooBuilder builder,
                                final InternalWorkingMemory[] workingMemories) {
-        if ( !this.isInUse() ) {
+        boolean result = super.doRemove( context, builder, workingMemories );
+        if (result) {
             for( InternalWorkingMemory workingMemory : workingMemories ) {
                 workingMemory.clearNodeMemory( this );
             }
-            getLeftTupleSource().removeTupleSink( this );
-            return true;
-        } else {
-            // need to re-wire eval expression to the same one from another rule
-            // that is sharing this node
-            Entry<Rule, RuleComponent> next = this.getAssociations().entrySet().iterator().next();
-            this.condition = (EvalCondition) next.getValue();
-            return false;
         }
+        return result;
     }
 }

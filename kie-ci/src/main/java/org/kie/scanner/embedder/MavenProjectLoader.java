@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import java.io.InputStream;
 public class MavenProjectLoader {
     private static final Logger log = LoggerFactory.getLogger(KieScanner.class);
 
-    private static MavenProject mavenProject;
+    static MavenProject mavenProject;
 
     public static MavenProject parseMavenPom(File pomFile) {
         return parseMavenPom(pomFile, false);
@@ -38,10 +38,16 @@ public class MavenProjectLoader {
         }
         MavenRequest mavenRequest = createMavenRequest(offline);
         mavenRequest.setPom( pomFile.getAbsolutePath() );
+        MavenEmbedder mavenEmbedder = null;
         try {
-            return new MavenEmbedder( mavenRequest ).readProject( pomFile );
+            mavenEmbedder = new MavenEmbedder( mavenRequest );
+            return mavenEmbedder.readProject( pomFile );
         } catch (Exception e) {
             throw new RuntimeException(e);
+        } finally {
+            if (mavenEmbedder != null) {
+                mavenEmbedder.dispose();
+            }
         }
     }
 
@@ -50,20 +56,37 @@ public class MavenProjectLoader {
     }
 
     public static MavenProject parseMavenPom(InputStream pomStream, boolean offline) {
-        MavenRequest mavenRequest = createMavenRequest(offline);
+        MavenEmbedder mavenEmbedder = null;
         try {
-            return new MavenEmbedder( mavenRequest ).readProject( pomStream );
+            mavenEmbedder = newMavenEmbedder(offline);
+            return mavenEmbedder.readProject( pomStream );
         } catch (Exception e) {
+            log.error("Unable to create MavenProject from InputStream", e);
             throw new RuntimeException(e);
+        } finally {
+            if (mavenEmbedder != null) {
+                mavenEmbedder.dispose();
+            }
         }
+    }
+
+    public static MavenEmbedder newMavenEmbedder(boolean offline) {
+        MavenRequest mavenRequest = createMavenRequest(offline);
+        MavenEmbedder mavenEmbedder;
+            try {
+                mavenEmbedder = new MavenEmbedder( mavenRequest );
+            } catch (MavenEmbedderException e) {
+                log.error("Unable to create new MavenEmbedder", e);
+                throw new RuntimeException(e);
+            }
+        return mavenEmbedder;
     }
 
     private static MavenRequest createMavenRequest(boolean offline) {
         MavenRequest mavenRequest = new MavenRequest();
         mavenRequest.setLocalRepositoryPath( MavenSettings.getSettings().getLocalRepository() );
-        if ( MavenSettings.getUserSettingsFile() != null) {
-            mavenRequest.setUserSettingsFile(MavenSettings.getUserSettingsFile().getAbsolutePath());
-        }
+        mavenRequest.setUserSettingsSource(MavenSettings.getUserSettingsSource());
+
         // BZ-1007894: If dependency is not resolvable and maven project builder does not complain about it,
         // then a <code>java.lang.NullPointerException</code> is thrown to the client.
         // So, the user will se an exception message "null", not descriptive about the real error.

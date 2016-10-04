@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,6 @@
  */
 
 package org.drools.workbench.models.commons.backend.rule;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 
 import org.drools.workbench.models.datamodel.imports.Import;
 import org.drools.workbench.models.datamodel.oracle.DataType;
@@ -67,11 +63,19 @@ import org.drools.workbench.models.datamodel.workitems.PortableStringParameterDe
 import org.drools.workbench.models.datamodel.workitems.PortableWorkDefinition;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
 
 public class RuleModelDRLPersistenceTest {
+
+    private static final Logger logger = LoggerFactory.getLogger( RuleModelDRLPersistenceTest.class );
 
     private RuleModelPersistence ruleModelPersistence;
 
@@ -774,7 +778,7 @@ public class RuleModelDRLPersistenceTest {
         // to satisfy JBRULES-850
         RuleModel m = getModelWithNoConstraints();
         String s = RuleModelDRLPersistenceImpl.getInstance().marshal( m );
-        // System.out.println(s);
+        logger.debug(s);
         assertTrue( s.contains( "Person( f1 : age)" ) );
 
         checkMarshalling( s,
@@ -899,7 +903,7 @@ public class RuleModelDRLPersistenceTest {
         m.addLhsItem( cp );
 
         String result = RuleModelDRLPersistenceImpl.getInstance().marshal( m );
-        System.out.println( result );
+        logger.debug( result );
 
         assertTrue( result.indexOf( "exists (Person( age == 42 )) " ) > 0 );
         checkMarshalling( result,
@@ -3140,6 +3144,36 @@ public class RuleModelDRLPersistenceTest {
 
         checkMarshalling( expected,
                           m );
+    }
+
+    @Test
+    public void testCompositeFactPatternWithFrom() {
+        final RuleModel m = new RuleModel();
+        m.name = "model";
+
+        final FactPattern fp1 = new FactPattern( "Data" );
+        fp1.setBoundName( "$d" );
+        m.addLhsItem( fp1 );
+
+        final FactPattern fp2 = new FactPattern( "Person" );
+        final FromCompositeFactPattern ffp1 = new FromCompositeFactPattern();
+        ffp1.setExpression( new ExpressionFormLine( new ExpressionVariable( fp1.getBoundName(),
+                                                                            fp1.getFactType() ) ) );
+        ffp1.setFactPattern( fp2 );
+        m.addLhsItem( ffp1 );
+
+        final String actual = RuleModelDRLPersistenceImpl.getInstance().marshal( m );
+        final String expected = "rule \"model\"\n" +
+                "dialect \"mvel\"\n" +
+                "when\n" +
+                "$d : Data( )\n" +
+                "(Person( ) from $d)\n" +
+                "\n" +
+                "then\n" +
+                "end\n";
+
+        assertEqualsIgnoreWhitespace( expected,
+                                      actual );
     }
 
     @Test

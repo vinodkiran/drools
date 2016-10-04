@@ -6,17 +6,26 @@
   <parent>
     <groupId>org.drools</groupId>
     <artifactId>drools-workbench-models</artifactId>
-    <version>6.4.0-SNAPSHOT</version>
+    <version>7.0.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>drools-workbench-models-guided-dtable</artifactId>
+  <packaging>bundle</packaging><!-- bundle = jar + OSGi metadata -->
 
   <name>Drools Workbench - Guided Decision Table Model</name>
   <description>Drools Workbench - Guided Decision Table Model</description>
 
+  <properties>
+    <osgi.Bundle-SymbolicName>org.drools.workbench.models.guided.dtable</osgi.Bundle-SymbolicName>
+  </properties>
+
   <dependencies>
 
     <!-- Internal dependencies -->
+    <dependency>
+      <groupId>org.kie</groupId>
+      <artifactId>kie-api</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.drools</groupId>
       <artifactId>drools-compiler</artifactId>
@@ -37,6 +46,17 @@
       <groupId>com.thoughtworks.xstream</groupId>
       <artifactId>xstream</artifactId>
     </dependency>
+
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -50,5 +70,23 @@
         <directory>src/main/resources</directory>
       </resource>
     </resources>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.felix</groupId>
+        <artifactId>maven-bundle-plugin</artifactId>
+        <configuration>
+          <instructions>
+            <Export-Package>
+              org.drools.workbench.models.guided.dtable.*
+            </Export-Package>
+            <Import-Package>
+              *
+            </Import-Package>
+            <_removeheaders>Private-Package</_removeheaders>
+          </instructions>
+        </configuration>
+      </plugin>
+    </plugins>
   </build>
 </project>

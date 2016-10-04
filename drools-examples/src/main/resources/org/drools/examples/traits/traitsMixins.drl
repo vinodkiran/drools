@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,24 +21,17 @@ import org.drools.examples.traits.Scholar;
 
 declare Person
     @Traitable
-
     name    : String       = "john"     @key
-
     age     : int          = 18
-
     weight  : Double       = 75.4
-
 end
 
+declare Scholar end
 
 declare trait Student extends Scholar
-
     name    : String
-
     age     : int
-
     weight  : Double
-
     school  : String
 end
 

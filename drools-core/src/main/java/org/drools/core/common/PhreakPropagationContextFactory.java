@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@ package org.drools.core.common;
 
 import org.drools.core.definitions.rule.impl.RuleImpl;
 import org.drools.core.marshalling.impl.MarshallerReaderContext;
-import org.drools.core.reteoo.LeftTuple;
 import org.drools.core.rule.EntryPointId;
 import org.drools.core.spi.PropagationContext;
+import org.drools.core.spi.Tuple;
 import org.drools.core.util.bitmask.BitMask;
 
 import java.io.Serializable;
@@ -35,7 +35,7 @@ public class PhreakPropagationContextFactory implements PropagationContextFactor
     public PropagationContext createPropagationContext(final long number,
                                                        final int type,
                                                        final RuleImpl rule,
-                                                       final LeftTuple leftTuple,
+                                                       final Tuple leftTuple,
                                                        final InternalFactHandle factHandle,
                                                        final EntryPointId entryPoint,
                                                        final BitMask modificationMask,
@@ -47,7 +47,7 @@ public class PhreakPropagationContextFactory implements PropagationContextFactor
     public PropagationContext createPropagationContext(final long number,
                                                        final int type,
                                                        final RuleImpl rule,
-                                                       final LeftTuple leftTuple,
+                                                       final Tuple leftTuple,
                                                        final InternalFactHandle factHandle,
                                                        final EntryPointId entryPoint,
                                                        final MarshallerReaderContext readerContext) {
@@ -57,7 +57,7 @@ public class PhreakPropagationContextFactory implements PropagationContextFactor
     public PropagationContext createPropagationContext(final long number,
                                                        final int type,
                                                        final RuleImpl rule,
-                                                       final LeftTuple leftTuple,
+                                                       final Tuple leftTuple,
                                                        final InternalFactHandle factHandle,
                                                        final int activeActivations,
                                                        final int dormantActivations,
@@ -69,7 +69,7 @@ public class PhreakPropagationContextFactory implements PropagationContextFactor
     public PropagationContext createPropagationContext(final long number,
                                                        final int type,
                                                        final RuleImpl rule,
-                                                       final LeftTuple leftTuple,
+                                                       final Tuple leftTuple,
                                                        final InternalFactHandle factHandle,
                                                        final EntryPointId entryPoint) {
         return new PhreakPropagationContext(number, type, rule, leftTuple, factHandle, entryPoint);
@@ -78,8 +78,16 @@ public class PhreakPropagationContextFactory implements PropagationContextFactor
     public PropagationContext createPropagationContext(final long number,
                                                        final int type,
                                                        final RuleImpl rule,
-                                                       final LeftTuple leftTuple,
+                                                       final Tuple leftTuple,
                                                        final InternalFactHandle factHandle) {
         return new PhreakPropagationContext(number, type, rule, leftTuple, factHandle);
+    }
+
+    public static PropagationContext createPropagationContextForFact( InternalWorkingMemory workingMemory, InternalFactHandle factHandle, int propagationType ) {
+        PropagationContextFactory pctxFactory = workingMemory.getKnowledgeBase().getConfiguration().getComponentFactory().getPropagationContextFactory();
+
+        // if the fact is still in the working memory (since it may have been previously retracted already
+        return pctxFactory.createPropagationContext( workingMemory.getNextPropagationIdCounter(), propagationType,
+                                                     null, null, factHandle );
     }
 }

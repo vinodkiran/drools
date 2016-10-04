@@ -5,8 +5,8 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>org.kie</groupId>
-    <artifactId>kie-parent-with-dependencies</artifactId>
-    <version>6.4.0-SNAPSHOT</version>
+    <artifactId>kie-parent</artifactId>
+    <version>7.0.0-SNAPSHOT</version>
     <!-- relativePath causes out-of-date problems on hudson slaves -->
     <!--<relativePath>../droolsjbpm-build-bootstrap/pom.xml</relativePath>-->
   </parent>
@@ -43,12 +43,13 @@
   </repositories>
 
   <scm>
-    <connection>scm:git:git@github.com:droolsjbpm/drools.git</connection>
+    <connection>scm:git:https://github.com:droolsjbpm/drools.git</connection>
     <developerConnection>scm:git:git@github.com:droolsjbpm/drools.git</developerConnection>
     <url>https://github.com/droolsjbpm/drools</url>
   </scm>
 
   <modules>
+    <module>kie-test-util</module>
     <module>drools-beliefs</module>
     <module>drools-core</module>
     <module>drools-reteoo</module>
@@ -61,14 +62,28 @@
     <module>drools-examples</module>
     <module>drools-pmml</module>
     <module>drools-scorecards</module>
-    <module>kie-maven-plugin</module>
     <module>kie-ci</module>
     <module>kie-ci-osgi</module>
     <module>drools-examples-api</module>
     <module>drools-examples-cdi</module>
     <module>drools-workbench-models</module>
-    <module>knowledge-api-legacy5-adapter</module>
+    <module>drools-test-coverage</module>
   </modules>
+
+  <dependencyManagement>
+    <!-- Important: Do not add any additional dependency versions here!
+         The dependency management should only import drools-bom and kie-third-party-bom to get the proper versions
+         it needs. Any additional 3rd party dependency versions need to go directly into kie-third-party-bom. -->
+    <dependencies>
+      <dependency>
+        <groupId>org.drools</groupId>
+        <artifactId>drools-bom</artifactId>
+        <version>${version.org.kie}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <build>
     <pluginManagement>
@@ -79,6 +94,7 @@
           <configuration>
             <forkCount>${surefire.forkCount}</forkCount>
             <reuseForks>true</reuseForks>
+            <runOrder>hourly</runOrder>
           </configuration>
         </plugin>
       </plugins>

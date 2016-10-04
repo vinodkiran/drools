@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.drools.core.base;
 import org.drools.core.base.field.BooleanFieldImpl;
 import org.drools.core.base.field.ClassFieldImpl;
 import org.drools.core.base.field.DoubleFieldImpl;
+import org.drools.core.base.field.IntegerFieldImpl;
 import org.drools.core.base.field.LongFieldImpl;
 import org.drools.core.base.field.ObjectFieldImpl;
 import org.drools.core.spi.FieldValue;
@@ -39,74 +40,6 @@ public class FieldFactory implements FieldDataFactory, Serializable {
     }
 
     protected FieldFactory() {
-    }
-
-    public FieldValue getFieldValue( String value,
-                                     ValueType valueType) {
-        FieldValue field = null;
-        if ( value == null || "null".equals( value )) {
-            valueType = ValueType.NULL_TYPE;
-        }
-        
-        value = value.trim();
-        if ( (value.startsWith( "\"" ) && value.endsWith( "\"" )) ||
-              value.startsWith( "'" ) && value.endsWith( "'" ) ) {
-            value = value.substring( 1, value.length() - 1 );
-        }
-
-        if ( valueType == ValueType.NULL_TYPE ) {
-            field = new ObjectFieldImpl( null );
-        } else if ( valueType == ValueType.PCHAR_TYPE ) {
-            field = new LongFieldImpl( value.charAt( 0 ) );
-        } else if ( valueType == ValueType.PBYTE_TYPE ) {
-            field = new LongFieldImpl( Long.parseLong( value ) );
-        } else if ( valueType == ValueType.PSHORT_TYPE ) {
-            field = new LongFieldImpl( Long.parseLong( value ) );
-        } else if ( valueType == ValueType.PINTEGER_TYPE ) {
-            field = new LongFieldImpl( Long.parseLong( stripNumericType( value ) ) );
-        } else if ( valueType == ValueType.PLONG_TYPE ) {
-            field = new LongFieldImpl( Long.parseLong( stripNumericType( value ) ) );
-        } else if ( valueType == ValueType.PFLOAT_TYPE ) {
-            field = new DoubleFieldImpl( Float.parseFloat( stripNumericType( value ) ) );
-        } else if ( valueType == ValueType.PDOUBLE_TYPE ) {
-            field = new DoubleFieldImpl( Double.parseDouble( stripNumericType( value ) ) );
-        } else if ( valueType == ValueType.PBOOLEAN_TYPE ) {
-            field = new BooleanFieldImpl( Boolean.valueOf( value ).booleanValue() );
-        } else if ( valueType == ValueType.CHAR_TYPE ) {
-            field = new ObjectFieldImpl( value.charAt( 0 ) );
-        } else if ( valueType == ValueType.BYTE_TYPE ) {
-            field = new ObjectFieldImpl( new Byte( value ) );
-        } else if ( valueType == ValueType.SHORT_TYPE ) {
-            field = new ObjectFieldImpl( new Short( value ) );
-        } else if ( valueType == ValueType.INTEGER_TYPE ) {
-            field = new ObjectFieldImpl( new Integer( stripNumericType( value ) ) );
-        } else if ( valueType == ValueType.LONG_TYPE ) {
-            field = new ObjectFieldImpl( new Long( stripNumericType( value ) ) );
-        } else if ( valueType == ValueType.FLOAT_TYPE ) {
-            field = new ObjectFieldImpl( new Float( stripNumericType( value ) ) );
-        } else if ( valueType == ValueType.DOUBLE_TYPE ) {
-            field = new ObjectFieldImpl( new Double( stripNumericType( value ) ) );
-        } else if ( valueType == ValueType.BOOLEAN_TYPE ) {
-            field = new ObjectFieldImpl( Boolean.valueOf( value ) );
-        } else if ( valueType == ValueType.STRING_TYPE ) {
-            field = new ObjectFieldImpl( value.intern() );
-        } else if ( valueType == ValueType.DATE_TYPE ) {
-            Date date = DateUtils.parseDate( value );
-            field = new ObjectFieldImpl( date );
-        } else if ( valueType == ValueType.ARRAY_TYPE ) {
-            //MN: I think its fine like this.
-            field = new ObjectFieldImpl( value );
-        } else if ( valueType == ValueType.OBJECT_TYPE ) {
-            field = new ObjectFieldImpl( value );
-        } else if ( valueType == ValueType.BIG_DECIMAL_TYPE ) {
-            field = new ObjectFieldImpl( MathUtils.getBigDecimal( value ) );
-        } else if ( valueType == ValueType.BIG_INTEGER_TYPE ) {
-            field = new ObjectFieldImpl( MathUtils.getBigInteger( value ) );
-        } else if ( valueType == ValueType.CLASS_TYPE ) {
-            field = new ClassFieldImpl( value );
-        }
-
-        return field;
     }
 
     public FieldValue getFieldValue(Object value,
@@ -182,9 +115,9 @@ public class FieldFactory implements FieldDataFactory, Serializable {
             }
         } else if ( valueType == ValueType.PBOOLEAN_TYPE || valueType == ValueType.BOOLEAN_TYPE ) {
             if( value instanceof String ) {
-                field = new BooleanFieldImpl( Boolean.valueOf( (String) value).booleanValue() );
+                field = new BooleanFieldImpl( Boolean.valueOf( (String) value) );
             } else {
-                field = new BooleanFieldImpl( ((Boolean) value).booleanValue() );
+                field = new BooleanFieldImpl( (Boolean) value );
             }
         }  else if ( valueType == ValueType.STRING_TYPE ) {
             field = new ObjectFieldImpl( value );
@@ -233,7 +166,7 @@ public class FieldFactory implements FieldDataFactory, Serializable {
     }
 
     public FieldValue getFieldValue(final int value) {
-        return new LongFieldImpl( value );
+        return new IntegerFieldImpl( value );
     }
 
     public FieldValue getFieldValue(final long value) {

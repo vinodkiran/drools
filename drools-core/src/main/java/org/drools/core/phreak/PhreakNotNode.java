@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,15 @@ package org.drools.core.phreak;
 
 import org.drools.core.common.BetaConstraints;
 import org.drools.core.common.InternalWorkingMemory;
-import org.drools.core.common.LeftTupleSets;
-import org.drools.core.common.RightTupleSets;
+import org.drools.core.common.TupleSets;
 import org.drools.core.reteoo.BetaMemory;
 import org.drools.core.reteoo.LeftTuple;
-import org.drools.core.reteoo.LeftTupleMemory;
 import org.drools.core.reteoo.LeftTupleSink;
 import org.drools.core.reteoo.NotNode;
 import org.drools.core.reteoo.RightTuple;
-import org.drools.core.reteoo.RightTupleMemory;
+import org.drools.core.reteoo.TupleMemory;
 import org.drools.core.rule.ContextEntry;
+import org.drools.core.spi.PropagationContext;
 import org.drools.core.util.FastIterator;
 
 import static org.drools.core.phreak.PhreakJoinNode.updateChildLeftTuple;
@@ -36,10 +35,11 @@ public class PhreakNotNode {
                        LeftTupleSink sink,
                        BetaMemory bm,
                        InternalWorkingMemory wm,
-                       LeftTupleSets srcLeftTuples,
-                       LeftTupleSets trgLeftTuples,
-                       LeftTupleSets stagedLeftTuples) {
-        RightTupleSets srcRightTuples = bm.getStagedRightTuples().takeAll();
+                       TupleSets<LeftTuple> srcLeftTuples,
+                       TupleSets<LeftTuple> trgLeftTuples,
+                       TupleSets<LeftTuple> stagedLeftTuples) {
+
+        TupleSets<RightTuple> srcRightTuples = bm.getStagedRightTuples().takeAll();
 
         if (srcLeftTuples.getDeleteFirst() != null) {
             // left deletes must come before right deletes. Otherwise right deletes could
@@ -93,17 +93,15 @@ public class PhreakNotNode {
                               LeftTupleSink sink,
                               BetaMemory bm,
                               InternalWorkingMemory wm,
-                              LeftTupleSets srcLeftTuples,
-                              LeftTupleSets trgLeftTuples) {
-        LeftTupleMemory ltm = bm.getLeftTupleMemory();
-        RightTupleMemory rtm = bm.getRightTupleMemory();
+                              TupleSets<LeftTuple> srcLeftTuples,
+                              TupleSets<LeftTuple> trgLeftTuples) {
+        TupleMemory ltm = bm.getLeftTupleMemory();
+        TupleMemory rtm = bm.getRightTupleMemory();
         ContextEntry[] contextEntry = bm.getContext();
         BetaConstraints constraints = notNode.getRawConstraints();
 
         for (LeftTuple leftTuple = srcLeftTuples.getInsertFirst(); leftTuple != null; ) {
             LeftTuple next = leftTuple.getStagedNext();
-
-            FastIterator it = notNode.getRightIterator(rtm);
 
             boolean useLeftMemory = RuleNetworkEvaluator.useLeftMemory(notNode, leftTuple);
 
@@ -112,17 +110,10 @@ public class PhreakNotNode {
                                          leftTuple );
 
             // This method will also remove rightTuples that are from subnetwork where no leftmemory use used
-            RuleNetworkEvaluator.findLeftTupleBlocker( notNode, rtm, contextEntry, constraints, leftTuple, it, useLeftMemory );
+            RuleNetworkEvaluator.findLeftTupleBlocker( notNode, rtm, contextEntry, constraints, leftTuple, useLeftMemory );
 
             if (leftTuple.getBlocker() == null) {
-                // tuple is not blocked, so add to memory so other fact handles can attempt to match
-                if (useLeftMemory) {
-                    ltm.add(leftTuple);
-                }
-
-                trgLeftTuples.addInsert(sink.createLeftTuple(leftTuple,
-                                                             sink,
-                                                             leftTuple.getPropagationContext(), useLeftMemory)); // use leftTuple pctx here, as no right input caused the trigger anway
+                insertChildLeftTuple( sink, trgLeftTuples, ltm, leftTuple, leftTuple.getPropagationContext(), useLeftMemory );
             }
             leftTuple.clearStaged();
             leftTuple = next;
@@ -133,12 +124,12 @@ public class PhreakNotNode {
     public void doRightInserts(NotNode notNode,
                                BetaMemory bm,
                                InternalWorkingMemory wm,
-                               RightTupleSets srcRightTuples,
-                               LeftTupleSets trgLeftTuples,
-                               LeftTupleSets stagedLeftTuples ) {
+                               TupleSets<RightTuple> srcRightTuples,
+                               TupleSets<LeftTuple> trgLeftTuples,
+                               TupleSets<LeftTuple> stagedLeftTuples ) {
 
-        LeftTupleMemory ltm = bm.getLeftTupleMemory();
-        RightTupleMemory rtm = bm.getRightTupleMemory();
+        TupleMemory ltm = bm.getLeftTupleMemory();
+        TupleMemory rtm = bm.getRightTupleMemory();
         ContextEntry[] contextEntry = bm.getContext();
         BetaConstraints constraints = notNode.getRawConstraints();
 
@@ -156,7 +147,7 @@ public class PhreakNotNode {
 
                 constraints.updateFromFactHandle( contextEntry,
                                                   wm,
-                                                  rightTuple.getFactHandle() );
+                                                  rightTuple.getFactHandleForEvaluation() );
                 for ( LeftTuple leftTuple = notNode.getFirstLeftTuple( rightTuple, ltm, it ); leftTuple != null; ) {
                     // preserve next now, in case we remove this leftTuple
                     LeftTuple temp = (LeftTuple) it.next( leftTuple );
@@ -182,7 +173,7 @@ public class PhreakNotNode {
 
                         if ( childLeftTuple != null ) { // NotNode only has one child
                             childLeftTuple.setPropagationContext( rightTuple.getPropagationContext() );
-                            RuleNetworkEvaluator.deleteLeftChild( childLeftTuple, trgLeftTuples, stagedLeftTuples );
+                            RuleNetworkEvaluator.unlinkAndDeleteChildLeftTuple( childLeftTuple, trgLeftTuples, stagedLeftTuples );
                         }
                     }
 
@@ -209,11 +200,11 @@ public class PhreakNotNode {
                               LeftTupleSink sink,
                               BetaMemory bm,
                               InternalWorkingMemory wm,
-                              LeftTupleSets srcLeftTuples,
-                              LeftTupleSets trgLeftTuples,
-                              LeftTupleSets stagedLeftTuples) {
-        LeftTupleMemory ltm = bm.getLeftTupleMemory();
-        RightTupleMemory rtm = bm.getRightTupleMemory();
+                              TupleSets<LeftTuple> srcLeftTuples,
+                              TupleSets<LeftTuple> trgLeftTuples,
+                              TupleSets<LeftTuple> stagedLeftTuples) {
+        TupleMemory ltm = bm.getLeftTupleMemory();
+        TupleMemory rtm = bm.getRightTupleMemory();
         ContextEntry[] contextEntry = bm.getContext();
         BetaConstraints constraints = notNode.getRawConstraints();
         boolean leftUpdateOptimizationAllowed = notNode.isLeftUpdateOptimizationAllowed();
@@ -252,7 +243,7 @@ public class PhreakNotNode {
 
             // if we where not blocked before (or changed buckets), or the previous blocker no longer blocks, then find the next blocker
             if (blocker == null || !constraints.isAllowedCachedLeft(contextEntry,
-                                                                    blocker.getFactHandle())) {
+                                                                    blocker.getFactHandleForEvaluation())) {
                 if (blocker != null) {
                     // remove previous blocker if it exists, as we know it doesn't block any more
                     blocker.removeBlocked(leftTuple);
@@ -261,7 +252,7 @@ public class PhreakNotNode {
                 // find first blocker, because it's a modify, we need to start from the beginning again
                 for (RightTuple newBlocker = firstRightTuple; newBlocker != null; newBlocker = (RightTuple) rightIt.next(newBlocker)) {
                     if (constraints.isAllowedCachedLeft(contextEntry,
-                                                        newBlocker.getFactHandle())) {
+                                                        newBlocker.getFactHandleForEvaluation())) {
                         leftTuple.setBlocker(newBlocker);
                         newBlocker.addBlocked(leftTuple);
 
@@ -278,15 +269,11 @@ public class PhreakNotNode {
                         // no need to remove, as we removed at the start
                         // to be matched against, as it's now blocked
                         childLeftTuple.setPropagationContext(leftTuple.getBlocker().getPropagationContext()); // we have the righttuple, so use it for the pctx
-                        RuleNetworkEvaluator.deleteLeftChild(childLeftTuple, trgLeftTuples, stagedLeftTuples);
+                        RuleNetworkEvaluator.unlinkAndDeleteChildLeftTuple( childLeftTuple, trgLeftTuples, stagedLeftTuples );
                     } // else: it's blocked now and no children so blocked before, thus do nothing
                 } else if (childLeftTuple == null) {
                     // not blocked, with no children, must have been previously blocked so assert
-                    ltm.add(leftTuple); // add to memory so other fact handles can attempt to match
-                    trgLeftTuples.addInsert(sink.createLeftTuple(leftTuple,
-                                                                 sink,
-                                                                 leftTuple.getPropagationContext(), true)); // use leftTuple for the pctx here, as the right one is not available
-                                                                                                            // this won't cause a problem, as the trigger tuple (to the left) will be more recent anwyay
+                    insertChildLeftTuple( sink, trgLeftTuples, ltm, leftTuple, leftTuple.getPropagationContext(), true );
                 } else {
                     updateChildLeftTuple(childLeftTuple, stagedLeftTuples, trgLeftTuples);
 
@@ -306,11 +293,11 @@ public class PhreakNotNode {
                                LeftTupleSink sink,
                                BetaMemory bm,
                                InternalWorkingMemory wm,
-                               RightTupleSets srcRightTuples,
-                               LeftTupleSets trgLeftTuples,
-                               LeftTupleSets stagedLeftTuples) {
-        LeftTupleMemory ltm = bm.getLeftTupleMemory();
-        RightTupleMemory rtm = bm.getRightTupleMemory();
+                               TupleSets<RightTuple> srcRightTuples,
+                               TupleSets<LeftTuple> trgLeftTuples,
+                               TupleSets<LeftTuple> stagedLeftTuples) {
+        TupleMemory ltm = bm.getLeftTupleMemory();
+        TupleMemory rtm = bm.getRightTupleMemory();
         ContextEntry[] contextEntry = bm.getContext();
         BetaConstraints constraints = notNode.getRawConstraints();
 
@@ -322,7 +309,7 @@ public class PhreakNotNode {
             if ( ltm != null && ltm.size() > 0 ) {
                 constraints.updateFromFactHandle( contextEntry,
                                                   wm,
-                                                  rightTuple.getFactHandle() );
+                                                  rightTuple.getFactHandleForEvaluation() );
 
                 FastIterator leftIt = notNode.getLeftIterator( ltm );
                 LeftTuple firstLeftTuple = notNode.getFirstLeftTuple( rightTuple, ltm, leftIt );
@@ -351,7 +338,7 @@ public class PhreakNotNode {
                         LeftTuple childLeftTuple = leftTuple.getFirstChild();
                         if ( childLeftTuple != null ) {
                             childLeftTuple.setPropagationContext( rightTuple.getPropagationContext() );
-                            RuleNetworkEvaluator.deleteRightChild( childLeftTuple, trgLeftTuples, stagedLeftTuples );
+                            RuleNetworkEvaluator.unlinkAndDeleteChildLeftTuple( childLeftTuple, trgLeftTuples, stagedLeftTuples );
                         }
                     }
 
@@ -397,7 +384,7 @@ public class PhreakNotNode {
                         // cannot select a RightTuple queued in the delete list
                         // There may be UPDATE RightTuples too, but that's ok. They've already been re-added to the correct bucket, safe to be reprocessed.
                         if ( leftTuple.getStagedType() != LeftTuple.DELETE && newBlocker.getStagedType() != LeftTuple.DELETE &&
-                             constraints.isAllowedCachedLeft( contextEntry, newBlocker.getFactHandle() ) ) {
+                             constraints.isAllowedCachedLeft( contextEntry, newBlocker.getFactHandleForEvaluation() ) ) {
 
                             leftTuple.setBlocker( newBlocker );
                             newBlocker.addBlocked( leftTuple );
@@ -407,15 +394,7 @@ public class PhreakNotNode {
                     }
 
                     if ( leftTuple.getBlocker() == null ) {
-                        // was previous blocked and not in memory, so add
-                        if (ltm != null) {
-                            ltm.add( leftTuple );
-                        }
-
-                        // subclasses like ForallNotNode might override this propagation
-                        trgLeftTuples.addInsert( sink.createLeftTuple( leftTuple,
-                                                                       sink,
-                                                                       rightTuple.getPropagationContext(), true ) );
+                        insertChildLeftTuple( sink, trgLeftTuples, ltm, leftTuple, rightTuple.getPropagationContext(), true );
                     }
 
                     leftTuple = temp;
@@ -430,10 +409,10 @@ public class PhreakNotNode {
     }
 
     public void doLeftDeletes(BetaMemory bm,
-                              LeftTupleSets srcLeftTuples,
-                              LeftTupleSets trgLeftTuples,
-                              LeftTupleSets stagedLeftTuples) {
-        LeftTupleMemory ltm = bm.getLeftTupleMemory();
+                              TupleSets<LeftTuple> srcLeftTuples,
+                              TupleSets<LeftTuple> trgLeftTuples,
+                              TupleSets<LeftTuple> stagedLeftTuples) {
+        TupleMemory ltm = bm.getLeftTupleMemory();
 
         for (LeftTuple leftTuple = srcLeftTuples.getDeleteFirst(); leftTuple != null; ) {
             LeftTuple next = leftTuple.getStagedNext();
@@ -448,7 +427,7 @@ public class PhreakNotNode {
 
                 if (childLeftTuple != null) { // NotNode only has one child
                     childLeftTuple.setPropagationContext(leftTuple.getPropagationContext());
-                    RuleNetworkEvaluator.deleteLeftChild(childLeftTuple, trgLeftTuples, stagedLeftTuples); // no need to update pctx, as no right available, and pctx will exist on a parent LeftTuple anyway
+                    RuleNetworkEvaluator.unlinkAndDeleteChildLeftTuple( childLeftTuple, trgLeftTuples, stagedLeftTuples ); // no need to update pctx, as no right available, and pctx will exist on a parent LeftTuple anyway
                 }
             } else {
                 blocker.removeBlocked(leftTuple);
@@ -462,10 +441,10 @@ public class PhreakNotNode {
                                LeftTupleSink sink,
                                BetaMemory bm,
                                InternalWorkingMemory wm,
-                               RightTupleSets srcRightTuples,
-                               LeftTupleSets trgLeftTuples) {
-        LeftTupleMemory ltm = bm.getLeftTupleMemory();
-        RightTupleMemory rtm = bm.getRightTupleMemory();
+                               TupleSets<RightTuple> srcRightTuples,
+                               TupleSets<LeftTuple> trgLeftTuples) {
+        TupleMemory ltm = bm.getLeftTupleMemory();
+        TupleMemory rtm = bm.getRightTupleMemory();
         ContextEntry[] contextEntry = bm.getContext();
         BetaConstraints constraints = notNode.getRawConstraints();
 
@@ -500,13 +479,13 @@ public class PhreakNotNode {
                                                 leftTuple);
 
                     if (useComparisonIndex) {
-                        rootBlocker = rtm.getFirst(leftTuple, null, it);
+                        rootBlocker = (RightTuple) rtm.getFirst(leftTuple);
                     }
 
                     // we know that older tuples have been checked so continue next
                     for (RightTuple newBlocker = rootBlocker; newBlocker != null; newBlocker = (RightTuple) it.next(newBlocker)) {
                         if (constraints.isAllowedCachedLeft(contextEntry,
-                                                            newBlocker.getFactHandle())) {
+                                                            newBlocker.getFactHandleForEvaluation())) {
                             leftTuple.setBlocker(newBlocker);
                             newBlocker.addBlocked(leftTuple);
 
@@ -516,22 +495,27 @@ public class PhreakNotNode {
 
                     if (leftTuple.getBlocker() == null) {
                         // was previous blocked and not in memory, so add
-                        ltm.add(leftTuple);
-
-                        trgLeftTuples.addInsert(sink.createLeftTuple(leftTuple,
-                                                                     sink,
-                                                                     rightTuple.getPropagationContext(), true));
+                        insertChildLeftTuple( sink, trgLeftTuples, ltm, leftTuple, rightTuple.getPropagationContext(), true );
                     }
 
                     leftTuple = temp;
                 }
             }
 
-            rightTuple.nullBlocked();
+            rightTuple.setBlocked(null);
             rightTuple.clearStaged();
             rightTuple = next;
         }
 
         constraints.resetTuple(contextEntry);
+    }
+
+    private static void insertChildLeftTuple( LeftTupleSink sink, TupleSets<LeftTuple> trgLeftTuples, TupleMemory ltm, LeftTuple leftTuple, PropagationContext pctx, boolean useLeftMemory ) {
+        if (!leftTuple.isExpired()) {
+            if (useLeftMemory) {
+                ltm.add(leftTuple);
+            }
+            trgLeftTuples.addInsert( sink.createLeftTuple( leftTuple, sink, pctx, useLeftMemory ) );
+        }
     }
 }

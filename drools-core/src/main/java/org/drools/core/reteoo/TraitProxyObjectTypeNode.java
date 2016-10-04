@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 JBoss Inc
+ * Copyright 2013 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,11 +34,7 @@ public class TraitProxyObjectTypeNode extends ObjectTypeNode {
                               ModifyPreviousTuples modifyPreviousTuples,
                               PropagationContext context,
                               InternalWorkingMemory workingMemory ) {
-        if ( dirty ) {
-            resetIdGenerator();
-            updateTupleSinkId( this, this );
-            dirty = false;
-        }
+        checkDirty();
         // node can't have sinks. Avoid mask recalculations and other operations on updates
     }
 

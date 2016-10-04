@@ -1,9 +1,9 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -32,8 +32,11 @@ import org.drools.compiler.compiler.DroolsWarningWrapper;
 import org.drools.compiler.compiler.DuplicateFunction;
 import org.drools.compiler.compiler.DuplicateRule;
 import org.drools.compiler.compiler.GlobalError;
-import org.drools.compiler.compiler.GuidedRuleTemplateConverter;
-import org.drools.compiler.compiler.GuidedRuleTemplateConverterFactory;
+import org.drools.compiler.compiler.GuidedDecisionTableFactory;
+import org.drools.compiler.compiler.GuidedDecisionTableProvider;
+import org.drools.compiler.compiler.GuidedRuleTemplateFactory;
+import org.drools.compiler.compiler.GuidedRuleTemplateProvider;
+import org.drools.compiler.compiler.GuidedScoreCardFactory;
 import org.drools.compiler.compiler.PMMLCompiler;
 import org.drools.compiler.compiler.PMMLCompilerFactory;
 import org.drools.compiler.compiler.PackageBuilderErrors;
@@ -43,6 +46,7 @@ import org.drools.compiler.compiler.ParserError;
 import org.drools.compiler.compiler.ProcessBuilder;
 import org.drools.compiler.compiler.ProcessBuilderFactory;
 import org.drools.compiler.compiler.ProcessLoadError;
+import org.drools.compiler.compiler.ResourceConversionResult;
 import org.drools.compiler.compiler.ResourceTypeDeclarationWarning;
 import org.drools.compiler.compiler.RuleBuildError;
 import org.drools.compiler.compiler.ScoreCardFactory;
@@ -128,7 +132,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -151,8 +154,7 @@ import java.util.Set;
 import java.util.Stack;
 import java.util.UUID;
 
-import static org.drools.core.util.ClassUtils.convertClassToResourcePath;
-import static org.drools.core.util.IoUtils.readBytesFromInputStream;
+import static org.drools.core.impl.KnowledgeBaseImpl.registerFunctionClassAndInnerClasses;
 import static org.drools.core.util.StringUtils.isEmpty;
 import static org.drools.core.util.StringUtils.ucFirst;
 
@@ -320,7 +322,7 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
         return resource;
     }
 
-    InternalKnowledgeBase getKnowledgeBase() {
+    public InternalKnowledgeBase getKnowledgeBase() {
         return kBase;
     }
 
@@ -399,8 +401,22 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
             return compositePackageDescr;
         }
 
-        String generatedDrl = DecisionTableFactory.loadFromInputStream(resource.getInputStream(), dtableConfiguration);
+        String generatedDrl = DecisionTableFactory.loadFromResource(resource, dtableConfiguration);
         return generatedDrlToPackageDescr( resource, generatedDrl );
+    }
+
+    public void addPackageFromGuidedDecisionTable(Resource resource) throws DroolsParserException,
+                                                                            IOException {
+        this.resource = resource;
+        addPackage( guidedDecisionTableToPackageDescr( resource ) );
+        this.resource = null;
+    }
+
+    PackageDescr guidedDecisionTableToPackageDescr(Resource resource) throws DroolsParserException,
+                                                                             IOException {
+        GuidedDecisionTableProvider guidedDecisionTableProvider = GuidedDecisionTableFactory.getGuidedDecisionTableProvider();
+        ResourceConversionResult conversionResult = guidedDecisionTableProvider.loadFromInputStream(resource.getInputStream());
+        return conversionResultToPackageDescr(resource, conversionResult);
     }
 
     private PackageDescr generatedDrlToPackageDescr( Resource resource, String generatedDrl ) throws DroolsParserException {
@@ -418,6 +434,10 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
             pkg.setResource(resource);
         }
         return parser.hasErrors() ? null : pkg;
+    }
+
+    PackageDescr generatedDslrToPackageDescr(Resource resource, String dslr) throws DroolsParserException {
+        return dslrReaderToPackageDescr(resource, new StringReader(dslr));
     }
 
     private void dumpDrlGeneratedFromDTable(File dumpDir, String generatedDrl, String srcPath) {
@@ -458,6 +478,19 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
         return generatedDrlToPackageDescr( resource, string );
     }
 
+    public void addPackageFromGuidedScoreCard(Resource resource) throws DroolsParserException,
+                                                                                          IOException {
+        this.resource = resource;
+        addPackage( guidedScoreCardToPackageDescr(resource) );
+        this.resource = null;
+    }
+
+    PackageDescr guidedScoreCardToPackageDescr(Resource resource) throws DroolsParserException,
+                                                                         IOException {
+        String drl = GuidedScoreCardFactory.loadFromInputStream(resource.getInputStream());
+        return generatedDrlToPackageDescr(resource, drl);
+    }
+
     public void addPackageFromTemplate(Resource resource) throws DroolsParserException,
                                                                  IOException {
         this.resource = resource;
@@ -467,23 +500,21 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
 
     PackageDescr templateToPackageDescr(Resource resource) throws DroolsParserException,
                                                                   IOException {
-        GuidedRuleTemplateConverter converter = GuidedRuleTemplateConverterFactory.getGuidedRuleTemplateConverter();
-        if (converter == null) {
-            return null;
-        }
+        GuidedRuleTemplateProvider guidedRuleTemplateProvider = GuidedRuleTemplateFactory.getGuidedRuleTemplateProvider();
+        ResourceConversionResult conversionResult = guidedRuleTemplateProvider.loadFromInputStream(resource.getInputStream());
+        return conversionResultToPackageDescr(resource, conversionResult);
+    }
 
-        byte[] template = readBytesFromInputStream(resource.getInputStream());
-        byte[] drl = converter.convert( template );
-
-        final DrlParser parser = new DrlParser(configuration.getLanguageLevel());
-        PackageDescr pkg = parser.parse(resource, new ByteArrayInputStream( drl ));
-        this.results.addAll(parser.getErrors());
-        if (pkg == null) {
-            addBuilderResult(new ParserError(resource, "Parser returned a null Package", 0, 0));
+    private PackageDescr conversionResultToPackageDescr(Resource resource, ResourceConversionResult resourceConversionResult)
+            throws DroolsParserException {
+        ResourceType resourceType = resourceConversionResult.getType();
+        if (ResourceType.DSLR.equals(resourceType)) {
+            return generatedDslrToPackageDescr(resource, resourceConversionResult.getContent());
+        } else if (ResourceType.DRL.equals(resourceType)) {
+            return generatedDrlToPackageDescr(resource, resourceConversionResult.getContent());
         } else {
-            pkg.setResource(resource);
+            throw new RuntimeException("Converting generated " + resourceType + " into PackageDescr is not supported!");
         }
-        return parser.hasErrors() ? null : pkg;
     }
 
     public void addPackageFromDrl(Resource resource) throws DroolsParserException,
@@ -596,20 +627,23 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
         this.resource = null;
     }
 
-    PackageDescr dslrToPackageDescr(Resource resource) throws DroolsParserException {
+    PackageDescr dslrToPackageDescr(Resource resource) throws DroolsParserException,
+                                                              IOException {
+        return dslrReaderToPackageDescr(resource, resource.getReader());
+    }
+
+    private PackageDescr dslrReaderToPackageDescr(Resource resource, Reader dslrReader) throws DroolsParserException {
         boolean hasErrors;
         PackageDescr pkg;
 
         DrlParser parser = new DrlParser(configuration.getLanguageLevel());
         DefaultExpander expander = getDslExpander();
 
-        Reader reader = null;
         try {
             if (expander == null) {
                 expander = new DefaultExpander();
             }
-            reader = resource.getReader();
-            String str = expander.expand(reader);
+            String str = expander.expand(dslrReader);
             if (expander.hasErrors()) {
                 for (ExpanderException error : expander.getErrors()) {
                     error.setResource(resource);
@@ -623,9 +657,9 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
         } catch (IOException e) {
             throw new RuntimeException(e);
         } finally {
-            if (reader != null) {
+            if (dslrReader != null) {
                 try {
-                    reader.close();
+                    dslrReader.close();
                 } catch (IOException e) {
                 }
             }
@@ -744,6 +778,10 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
                 addPackageFromDrl(resource);
             } else if (ResourceType.TEMPLATE.equals(type)) {
                 addPackageFromTemplate(resource);
+            } else if (ResourceType.GDST.equals(type)) {
+                addPackageFromGuidedDecisionTable(resource);
+            } else if (ResourceType.SCGD.equals(type)) {
+                addPackageFromGuidedScoreCard(resource);
             } else {
                 addPackageForExternalType(resource, type, configuration);
             }
@@ -1118,13 +1156,18 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
                             pkg.removeRule(((RuleImpl)rule));
                         }
                     }
+
+                    List<RuleImpl> rulesToBeRemoved = new ArrayList<RuleImpl>();
                     for (RuleDescr ruleDescr : packageDescr.getRules()) {
                         if (filterAccepts(ResourceChange.Type.RULE, ruleDescr.getNamespace(), ruleDescr.getName()) ) {
-                            if (pkg.getRule(ruleDescr.getName()) != null) {
-                                // XXX: this one notifies listeners
-                                this.kBase.removeRule(pkg, pkg.getRule(ruleDescr.getName()));
+                            RuleImpl rule = (RuleImpl)pkg.getRule(ruleDescr.getName());
+                            if (rule != null) {
+                                rulesToBeRemoved.add(rule);
                             }
                         }
+                    }
+                    if (!rulesToBeRemoved.isEmpty()) {
+                        kBase.removeRules( pkg, rulesToBeRemoved );
                     }
                 } finally {
                     this.kBase.unlock();
@@ -1693,6 +1736,7 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
             InternalKnowledgePackage pkg = pkgRegistry.getPackage();
             DialectCompiletimeRegistry ctr = pkgRegistry.getDialectCompiletimeRegistry();
             RuleDescr dummy = new RuleDescr(wd.getName() + " Window Declaration");
+            dummy.setResource(packageDescr.getResource());
             dummy.addAttribute(new AttributeDescr("dialect", "java"));
             RuleBuildContext context = new RuleBuildContext(this,
                                                             dummy,
@@ -1722,7 +1766,6 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
     }
 
     private void addFunction(final FunctionDescr functionDescr) {
-        functionDescr.setResource(this.resource);
         PackageRegistry pkgRegistry = this.pkgRegistryMap.get(functionDescr.getNamespace());
         Dialect dialect = pkgRegistry.getDialectCompiletimeRegistry().getDialect(functionDescr.getDialect());
         dialect.addFunction(functionDescr,
@@ -1745,9 +1788,11 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
         if (rootClassLoader instanceof ProjectClassLoader) {
             String functionClassName = functionDescr.getClassName();
             JavaDialectRuntimeData runtime = ((JavaDialectRuntimeData) pkgRegistry.getDialectRuntimeRegistry().getDialectData( "java" ));
-            byte [] def = runtime.getStore().get(convertClassToResourcePath(functionClassName));
-            if (def != null) {
-                ((ProjectClassLoader)rootClassLoader).storeClass(functionClassName, def);
+            try {
+                registerFunctionClassAndInnerClasses( functionClassName, runtime,
+                                                      (name, bytes) ->  ((ProjectClassLoader)rootClassLoader).storeClass( name, bytes ));
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException( e );
             }
         }
     }
@@ -2153,42 +2198,13 @@ public class KnowledgeBuilderImpl implements KnowledgeBuilder {
         return modified;
     }
 
-    public void startPackageUpdate() {
+    public void rewireAllClassObjectTypes() {
         if (kBase != null) {
-            kBase.lock();
-        }
-    }
-
-    public void completePackageUpdate() {
-        if (kBase != null) {
-            kBase.unlock();
-        }
-    }
-
-    public void setAllRuntimesDirty(Collection<String> packages) {
-        if (kBase != null) {
-            for (String pkgName : packages) {
-                InternalKnowledgePackage pkg = kBase.getPackage(pkgName);
-                if (pkg != null) {
-                    pkg.getDialectRuntimeRegistry().getDialectData("java").setDirty(true);
-                }
+            for (InternalKnowledgePackage pkg : kBase.getPackagesMap().values()) {
+                pkg.getDialectRuntimeRegistry().getDialectData("java").setDirty(true);
+                pkg.getClassFieldAccessorStore().wire();
             }
         }
-    }
-
-    public void rewireClassObjectTypes(Collection<String> packages) {
-        if (kBase != null) {
-            for (String pkgName : packages) {
-                InternalKnowledgePackage pkg = kBase.getPackage(pkgName);
-                if (pkg != null) {
-                    pkg.getClassFieldAccessorStore().wire();
-                }
-            }
-        }
-    }
-
-    public boolean isClassInUse(String className) {
-        return !(rootClassLoader instanceof ProjectClassLoader) || ((ProjectClassLoader) rootClassLoader).isClassInUse(className);
     }
 
     public interface AssetFilter {

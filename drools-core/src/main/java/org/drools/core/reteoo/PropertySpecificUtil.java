@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,8 +75,8 @@ public class PropertySpecificUtil {
         }
 
         BitMask mask = getEmptyPropertyReactiveMask(settableProperties.size());
-        if (listenedProperties != null && listenedProperties.contains( TraitableBean.TRAITSET_FIELD_NAME )) {
-            if (isPositive && listenedProperties != null && listenedProperties.contains( TraitableBean.TRAITSET_FIELD_NAME ) ) {
+        if (listenedProperties.contains( TraitableBean.TRAITSET_FIELD_NAME )) {
+            if (isPositive && listenedProperties.contains( TraitableBean.TRAITSET_FIELD_NAME ) ) {
                 mask = mask.set(TRAITABLE_BIT);
             }
         }
@@ -132,7 +132,7 @@ public class PropertySpecificUtil {
         return typeDeclaration.getSettableProperties();
     }
 
-    public static Class<?> getNodeClass(ObjectTypeNode objectTypeNode) {
+    private static Class<?> getNodeClass( ObjectTypeNode objectTypeNode ) {
         if (objectTypeNode == null) {
             return null;
         }

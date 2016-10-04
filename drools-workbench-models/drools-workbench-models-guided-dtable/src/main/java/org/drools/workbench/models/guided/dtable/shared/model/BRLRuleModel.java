@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 JBoss Inc
+ * Copyright 2012 Red Hat, Inc. and/or its affiliates.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -106,13 +106,15 @@ public class BRLRuleModel extends RuleModel {
     }
 
     @Override
-    public SingleFieldConstraint getLHSBoundField(final String var) {
+    public SingleFieldConstraint getLHSBoundField( final String var ) {
         for ( CompositeColumn<? extends BaseColumn> col : dtable.getConditions() ) {
             if ( col instanceof Pattern52 ) {
                 final Pattern52 p = (Pattern52) col;
                 for ( ConditionCol52 cc : p.getChildColumns() ) {
                     if ( cc.isBound() && cc.getBinding().equals( var ) ) {
-                        return new ConditionCol52FieldConstraintAdaptor( cc );
+                        final ConditionCol52FieldConstraintAdaptor sfcAdaptor = new ConditionCol52FieldConstraintAdaptor( cc );
+                        sfcAdaptor.setFactType( p.getFactType() );
+                        return sfcAdaptor;
                     }
                 }
             } else if ( col instanceof BRLConditionColumn ) {
@@ -121,9 +123,9 @@ public class BRLRuleModel extends RuleModel {
                     if ( p instanceof FactPattern ) {
                         final FactPattern fp = (FactPattern) p;
                         for ( FieldConstraint fc : fp.getFieldConstraints() ) {
-                            if (fc instanceof SingleFieldConstraint) {
-                                final List<String> fieldBindings = getFieldBinding(fc);
-                                if (fieldBindings.contains(var)) {
+                            if ( fc instanceof SingleFieldConstraint ) {
+                                final List<String> fieldBindings = getFieldBinding( fc );
+                                if ( fieldBindings.contains( var ) ) {
                                     return (SingleFieldConstraint) fc;
                                 }
                             }

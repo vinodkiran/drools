@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,6 @@
 */
 
 package org.drools.workbench.models.commons.backend.rule;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
@@ -40,12 +30,39 @@ import org.drools.workbench.models.datamodel.rule.ActionSetField;
 import org.drools.workbench.models.datamodel.rule.FieldNatureType;
 import org.drools.workbench.models.datamodel.rule.RuleModel;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
 class RuleModelPersistenceHelper {
 
     static String unwrapParenthesis( final String s ) {
         int start = s.indexOf( '(' );
         int end = s.lastIndexOf( ')' );
+        if ( start < 0 || end < 0 ) {
+            return s;
+        }
         return s.substring( start + 1,
+                            end ).trim();
+    }
+
+    static String unwrapTemplateKey( final String s ) {
+        int start = s.indexOf( "@{" );
+        if ( start < 0 ) {
+            return s;
+        }
+        int end = s.indexOf( "}",
+                             start );
+        if ( end < 0 ) {
+            return s;
+        }
+        return s.substring( start + 2,
                             end ).trim();
     }
 
@@ -63,9 +80,11 @@ class RuleModelPersistenceHelper {
                                  final String value,
                                  final Map<String, String> boundParams,
                                  final boolean isJavaDialect ) {
-
         if ( boundParams.containsKey( value ) ) {
             return FieldNatureType.TYPE_VARIABLE;
+        }
+        if ( value.contains( "@{" ) ) {
+            return FieldNatureType.TYPE_TEMPLATE;
         }
 
         return inferFieldNature( dataType,
@@ -100,7 +119,7 @@ class RuleModelPersistenceHelper {
             }
 
         } else if ( DataType.TYPE_STRING.equals( dataType ) ) {
-            if ( value.startsWith( "\"" ) ) {
+            if ( isStringLiteral( value ) ) {
                 return FieldNatureType.TYPE_LITERAL;
             } else {
                 return FieldNatureType.TYPE_FORMULA;
@@ -185,6 +204,28 @@ class RuleModelPersistenceHelper {
         }
 
         return nature;
+    }
+
+    private static boolean isStringLiteral( final String value ) {
+        boolean escape = false;
+        boolean inString = false;
+        for ( char c : value.toCharArray() ) {
+            if ( escape ) {
+                escape = false;
+                continue;
+            }
+            if ( !inString ) {
+                if ( !( c == ' ' || c == '\t' || c == '"' ) ) {
+                    return false;
+                }
+            }
+            if ( c == '"' ) {
+                inString = !inString;
+            } else {
+                escape = c == '\\';
+            }
+        }
+        return true;
     }
 
     static ModelField[] findFields( final RuleModel m,
@@ -300,7 +341,8 @@ class RuleModelPersistenceHelper {
         }
         for ( ModelField modelField : modelFields ) {
             if ( modelField.getName().equals( field ) ) {
-                return modelField.getType();
+                return getSimpleFactType( modelField.getType(),
+                                          dmo );
             }
         }
         return null;
@@ -381,6 +423,29 @@ class RuleModelPersistenceHelper {
             }
         }
         return methods;
+    }
+
+    static String removeNumericSuffix( final String value,
+                                       final String dataType ) {
+        if ( DataType.TYPE_NUMERIC_DOUBLE.equals( dataType ) ) {
+            if ( value.endsWith( "d" ) ) {
+                return value.substring( 0,
+                                        value.indexOf( "d" ) );
+            }
+        } else if ( DataType.TYPE_NUMERIC_FLOAT.equals( dataType ) ) {
+            if ( value.endsWith( "f" ) ) {
+                return value.substring( 0,
+                                        value.indexOf( "f" ) );
+            }
+
+        } else if ( DataType.TYPE_NUMERIC_LONG.equals( dataType ) ) {
+            if ( value.endsWith( "L" ) ) {
+                return value.substring( 0,
+                                        value.indexOf( "L" ) );
+
+            }
+        }
+        return value;
     }
 
 }

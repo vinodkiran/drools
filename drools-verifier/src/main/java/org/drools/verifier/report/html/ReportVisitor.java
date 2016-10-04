@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import java.util.Map;
 import org.drools.core.util.IoUtils;
 import org.mvel2.templates.TemplateRuntime;
 
-
 abstract class ReportVisitor {
 
     protected static String processHeader(String folder) {
@@ -43,11 +42,9 @@ abstract class ReportVisitor {
 
     protected static String readFile(String fileName) {
         StringBuffer str = new StringBuffer("");
-        try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(
-                    ReportVisitor.class.getResourceAsStream(fileName),
-                    IoUtils.UTF8_CHARSET));
-            String line = null;
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(ReportVisitor.class.getResourceAsStream(fileName), IoUtils.UTF8_CHARSET))) {
+            String line;
             while ((line = reader.readLine()) != null) {
                 str.append(line);
                 str.append("\n");

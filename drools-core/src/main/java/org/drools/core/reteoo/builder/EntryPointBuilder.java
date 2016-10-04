@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package org.drools.core.reteoo.builder;
 
 import org.drools.core.reteoo.EntryPointNode;
-import org.drools.core.reteoo.ObjectSource;
 import org.drools.core.rule.EntryPointId;
 import org.drools.core.rule.RuleConditionElement;
 
@@ -41,10 +40,10 @@ public class EntryPointBuilder
         EntryPointNode epn = context.getKnowledgeBase().getRete().getEntryPointNode( entry );
         if( epn == null ) {
             NodeFactory nFactory = context.getComponentFactory().getNodeFactoryService();
-            context.setObjectSource( (ObjectSource) utils.attachNode( context,
-                                                                      nFactory.buildEntryPointNode( context.getNextId(),
-                                                                                                    context.getKnowledgeBase().getRete(),
-                                                                                                    context ) ) );
+            context.setObjectSource( utils.attachNode( context,
+                                                       nFactory.buildEntryPointNode( context.getNextId(),
+                                                                                     context.getKnowledgeBase().getRete(),
+                                                                                     context ) ) );
         } else {
             context.setObjectSource( epn );
         }

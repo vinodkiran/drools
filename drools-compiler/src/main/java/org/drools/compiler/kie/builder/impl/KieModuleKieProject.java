@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,7 +129,10 @@ public class KieModuleKieProject extends AbstractKieProject {
         return clonedCL;
     }
 
-    public void updateToModule(InternalKieModule updatedKieModule) {
+    public Map<String, KieBaseModel> updateToModule(InternalKieModule updatedKieModule) {
+        Map<String, KieBaseModel> oldKieBaseModels = new HashMap<String, KieBaseModel>();
+        oldKieBaseModels.putAll( kBaseModels );
+
         this.kieModules = null;
         this.kJarFromKBaseName.clear();
 
@@ -147,6 +150,8 @@ public class KieModuleKieProject extends AbstractKieProject {
             cleanIndex();
             init(); // this might override class definitions, not sure we can do it any other way though
         }
+
+        return oldKieBaseModels;
     }
 
     @Override

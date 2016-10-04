@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -363,7 +363,7 @@ public class CompositeObjectSinkAdapter extends AbstractObjectSinkAdapter {
                 final AlphaNode sink = (AlphaNode) this.hashedSinkMap.get( hashKey );
                 if ( sink != null ) {
                     // go straight to the AlphaNode's propagator, as we know it's true and no need to retest
-                    sink.getSinkPropagator().propagateAssertObject( factHandle, context, workingMemory );
+                    sink.getObjectSinkPropagator().propagateAssertObject( factHandle, context, workingMemory );
                 }
             }
         }
@@ -412,7 +412,7 @@ public class CompositeObjectSinkAdapter extends AbstractObjectSinkAdapter {
                 final AlphaNode sink = (AlphaNode) this.hashedSinkMap.get( hashKey );
                 if ( sink != null ) {
                     // go straight to the AlphaNode's propagator, as we know it's true and no need to retest
-                    sink.getSinkPropagator().propagateModifyObject( factHandle, modifyPreviousTuples, context, workingMemory );
+                    sink.getObjectSinkPropagator().propagateModifyObject( factHandle, modifyPreviousTuples, context, workingMemory );
                 }
             }
         }
@@ -461,7 +461,7 @@ public class CompositeObjectSinkAdapter extends AbstractObjectSinkAdapter {
                 final AlphaNode sink = (AlphaNode) this.hashedSinkMap.get( hashKey );
                 if ( sink != null ) {
                     // only alpha nodes are hashable
-                    sink.getSinkPropagator().byPassModifyToBetaNode( factHandle, modifyPreviousTuples, context, workingMemory );
+                    sink.getObjectSinkPropagator().byPassModifyToBetaNode( factHandle, modifyPreviousTuples, context, workingMemory );
                 }
             }
         }
@@ -470,7 +470,7 @@ public class CompositeObjectSinkAdapter extends AbstractObjectSinkAdapter {
         if ( this.hashableSinks != null ) {
             for ( ObjectSinkNode sink = this.hashableSinks.getFirst(); sink != null; sink = sink.getNextObjectSinkNode() ) {
                 // only alpha nodes are hashable
-                ((AlphaNode)sink).getSinkPropagator().byPassModifyToBetaNode( factHandle, modifyPreviousTuples, context, workingMemory );
+                ((AlphaNode)sink).getObjectSinkPropagator().byPassModifyToBetaNode( factHandle, modifyPreviousTuples, context, workingMemory );
             }
         }
 
@@ -510,7 +510,7 @@ public class CompositeObjectSinkAdapter extends AbstractObjectSinkAdapter {
     public BaseNode getMatchingNode(BaseNode candidate) {
         if ( this.otherSinks != null ) {
             for ( ObjectSinkNode sink = this.otherSinks.getFirst(); sink != null; sink = sink.getNextObjectSinkNode() ) {
-                if ( candidate.equals( sink ) ) {
+                if ( sink.thisNodeEquals( candidate ) ) {
                     return (BaseNode) sink;
                 }
             }
@@ -518,7 +518,7 @@ public class CompositeObjectSinkAdapter extends AbstractObjectSinkAdapter {
 
         if ( this.hashableSinks != null ) {
             for ( ObjectSinkNode sink = this.hashableSinks.getFirst(); sink != null; sink = sink.getNextObjectSinkNode() ) {
-                if ( candidate.equals( sink ) ) {
+                if ( sink.thisNodeEquals( candidate ) ) {
                     return (BaseNode) sink;
                 }
             }
@@ -528,7 +528,7 @@ public class CompositeObjectSinkAdapter extends AbstractObjectSinkAdapter {
             final Iterator it = this.hashedSinkMap.newIterator();
             for ( ObjectEntry entry = (ObjectEntry) it.next(); entry != null; entry = (ObjectEntry) it.next() ) {
                 final ObjectSink sink = (ObjectSink) entry.getValue();
-                if ( candidate.equals( sink ) ) {
+                if ( sink.thisNodeEquals( candidate ) ) {
                     return (BaseNode) sink;
                 }
             }
@@ -566,7 +566,7 @@ public class CompositeObjectSinkAdapter extends AbstractObjectSinkAdapter {
                 sinks[at++] = sink;
             }
         }
-        
+
         if ( this.otherSinks != null ) {
             for ( ObjectSinkNode sink = this.otherSinks.getFirst(); sink != null; sink = sink.getNextObjectSinkNode() ) {
                 sinks[at++] = sink;
@@ -751,7 +751,7 @@ public class CompositeObjectSinkAdapter extends AbstractObjectSinkAdapter {
             } else {
                 this.type = OBJECT;
                 if ( !isNull ) {
-                    this.ovalue = value.getValue();
+                    this.ovalue = vtype.coerce( value.getValue() );
                     this.setHashCode( this.ovalue != null ? this.ovalue.hashCode() : 0 );
                 } else {
                     this.setHashCode( 0 );
@@ -860,19 +860,20 @@ public class CompositeObjectSinkAdapter extends AbstractObjectSinkAdapter {
                 return (other.isNull);
             }
 
+            if (this.index != other.index) {
+                return false;
+            }
+
             switch ( this.type ) {
                 case BOOL :
-                    return (this.index == other.index) && (this.bvalue == other.getBooleanValue());
+                    return this.bvalue == other.getBooleanValue();
                 case LONG :
-                    return (this.index == other.index) && (this.lvalue == other.getLongValue());
+                    return this.lvalue == other.getLongValue();
                 case DOUBLE :
-                    return (this.index == other.index) && (this.dvalue == other.getDoubleValue());
+                    return this.dvalue == other.getDoubleValue();
                 case OBJECT :
                     final Object otherValue = other.getObjectValue();
-                    if ( (this.ovalue != null) && (this.ovalue instanceof Number) && (otherValue instanceof Number) ) {
-                        return (this.index == other.index) && (((Number) this.ovalue).doubleValue() == ((Number) otherValue).doubleValue());
-                    }
-                    return (this.index == other.index) && (this.ovalue == null ? otherValue == null : this.ovalue.equals( otherValue ));
+                    return this.ovalue == null ? otherValue == null : this.ovalue.equals( otherValue );
             }
             return false;
         }

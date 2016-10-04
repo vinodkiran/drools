@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,11 +36,11 @@ public class MvelConstraintTestUtil extends MvelConstraint {
     }
 
     public MvelConstraintTestUtil(String expression, FieldValue fieldValue, InternalReadAccessor extractor) {
-        super(null, expression, null, findConstraintTypeForExpression(expression), fieldValue, extractor);
+        super(null, expression, null, findConstraintTypeForExpression(expression), fieldValue, extractor, null);
     }
 
     public MvelConstraintTestUtil(String expression, Declaration declaration, InternalReadAccessor extractor) {
-        super(new ArrayList<String>(), expression, new Declaration[] { declaration }, null, findConstraintTypeForExpression(expression), declaration, extractor, expression.contains(":="));
+        super(new ArrayList<String>(), expression, new Declaration[] { declaration }, null, null, findConstraintTypeForExpression(expression), declaration, extractor, expression.contains(":="));
     }
 
     public MvelConstraintTestUtil(String expression, String operator, Declaration declaration, InternalReadAccessor extractor) {
@@ -48,7 +48,7 @@ public class MvelConstraintTestUtil extends MvelConstraint {
     }
 
     public MvelConstraintTestUtil(String expression, IndexUtil.ConstraintType constraintType, Declaration declaration, InternalReadAccessor extractor) {
-        super(new ArrayList<String>(), expression, new Declaration[] { declaration }, null, constraintType, declaration, extractor, expression.contains(":="));
+        super(new ArrayList<String>(), expression, new Declaration[] { declaration }, null, null, constraintType, declaration, extractor, expression.contains(":="));
     }
 
     @Override

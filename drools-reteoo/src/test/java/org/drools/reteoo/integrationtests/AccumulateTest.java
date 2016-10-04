@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -919,7 +919,7 @@ public class AccumulateTest extends CommonTestMethodBase {
 
         // Check the network formation, to ensure the RiaNode is shared.
         ObjectTypeNode cheeseOtn = LinkingTest.getObjectTypeNode(kbase, Cheese.class);
-        ObjectSink[] oSinks = cheeseOtn.getSinkPropagator().getSinks();
+        ObjectSink[] oSinks = cheeseOtn.getObjectSinkPropagator().getSinks();
         assertEquals( 1, oSinks.length );
 
         JoinNode cheeseJoin = ( JoinNode ) oSinks[0];
@@ -927,7 +927,7 @@ public class AccumulateTest extends CommonTestMethodBase {
 
         assertEquals( 1, ltSinks.length );
         RightInputAdapterNode rian = ( RightInputAdapterNode ) ltSinks[0];
-        assertEquals( 2, rian.getSinkPropagator().size() );   //  RiaNode is shared, if this has two outputs
+        assertEquals( 2, rian.getObjectSinkPropagator().size() );   //  RiaNode is shared, if this has two outputs
 
         wm.insert(new Cheese("stilton", 10));
         wm.insert( new Person( "Alice", "brie" ) );
@@ -936,8 +936,8 @@ public class AccumulateTest extends CommonTestMethodBase {
         wm.fireAllRules();
 
         assertEquals(2, list.size() );
-        assertEquals( "r1:10.0", list.get(0));
-        assertEquals( "r2:10.0", list.get(1));
+        assertEquals( "r1:10", list.get(0));
+        assertEquals( "r2:10", list.get(1));
     }
 
     public void execTestAccumulateSum( String fileName ) throws Exception {
@@ -2019,11 +2019,11 @@ public class AccumulateTest extends CommonTestMethodBase {
         ksession.dispose();
         assertEquals( 1,
                 results.size() );
-        assertEquals( 9.0,
+        assertEquals( 9L,
                 results.get( 0 ) );
     }
 
-    @Test(timeout = 5000)
+    @Test(timeout = 10000)
     public void testInfiniteLoopAddingPkgAfterSession() throws Exception {
         // JBRULES-3488
         String rule = "package org.drools.compiler.test;\n" +

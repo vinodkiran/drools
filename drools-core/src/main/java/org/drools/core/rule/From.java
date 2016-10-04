@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package org.drools.core.rule;
 
 import org.drools.core.base.ClassObjectType;
 import org.drools.core.common.InternalWorkingMemory;
-import org.drools.core.reteoo.LeftTuple;
 import org.drools.core.spi.DataProvider;
 import org.drools.core.spi.PropagationContext;
 import org.drools.core.spi.Tuple;
@@ -70,7 +69,24 @@ public class From extends ConditionalElement
         out.writeObject(  resultClass );
     }
 
-    public void wire(Object object) {
+    @Override
+    public boolean equals( Object obj ) {
+        if ( this == obj ) {
+            return true;
+        }
+        if ( obj == null || !( obj instanceof From ) ) {
+            return false;
+        }
+
+        return dataProvider.equals( ((From) obj).dataProvider );
+    }
+
+    @Override
+    public int hashCode() {
+        return dataProvider.hashCode();
+    }
+
+    public void wire( Object object ) {
         this.dataProvider = KiePolicyHelper.isPolicyEnabled() ? new SafeDataProvider(( DataProvider ) object) : ( DataProvider ) object;
     }
 
@@ -144,7 +160,7 @@ public class From extends ConditionalElement
         }
 
         @Override
-        public Iterator getResults(final LeftTuple tuple,
+        public Iterator getResults(final Tuple tuple,
                                    final InternalWorkingMemory wm,
                                    final PropagationContext ctx,
                                    final Object providerContext) {
@@ -165,6 +181,20 @@ public class From extends ConditionalElement
         public SafeDataProvider clone() {
             return new SafeDataProvider( delegate.clone() );
         }
+
+        @Override
+        public boolean equals( Object obj ) {
+            return delegate.equals( obj );
+        }
+
+        @Override
+        public int hashCode() {
+            return delegate.hashCode();
+        }
     }
 
+    @Override
+    public boolean requiresLeftActivation() {
+        return true;
+    }
 }

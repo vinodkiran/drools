@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,7 +125,7 @@ public class MemoryFolderTest {
         f2.create();
         
         assertEquals( "../../..", f2.getPath().toRelativePortableString( f1.getPath() ) );                
-    }      
+    }
     
     @Test
     public void testNestedRelativeDifferentPath() {
@@ -189,7 +189,14 @@ public class MemoryFolderTest {
         assertFalse( fs.getFile( "src/main/resources/org/MyClass3.java" ).exists() );
         assertFalse( fs.getFile( "src/main/resources/org/MyClass4.java" ).exists() );        
         assertFalse( fs.getFile( "src/main/resources/org/domain/MyClass4.java" ).exists() );
-
-                 
     }
+
+    @Test
+    public void trimLeadingAndTrailing() {
+        assertEquals("", MemoryFolder.trimLeadingAndTrailing(""));
+        assertEquals("src/main", MemoryFolder.trimLeadingAndTrailing("/src/main"));
+        assertEquals("src/main", MemoryFolder.trimLeadingAndTrailing("src/main/"));
+        assertEquals("src/main", MemoryFolder.trimLeadingAndTrailing("/src/main/"));
+    }
+
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2007 JBoss Inc
+ * Copyright 2007 Red Hat, Inc. and/or its affiliates.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -186,8 +186,7 @@ public class MVELAccumulateBuilder
 
         accumulators = new Accumulator[functions.size()];
         // creating the custom array reader
-        InternalReadAccessor arrayReader = new SelfReferenceClassFieldReader( Object[].class,
-                                                                              "this" );
+        InternalReadAccessor arrayReader = new SelfReferenceClassFieldReader( Object[].class );
 
         int index = 0;
         Pattern pattern = (Pattern) context.getDeclarationResolver().peekBuildStack();
@@ -243,11 +242,12 @@ public class MVELAccumulateBuilder
                                                                 : "this == " + func.getBind(),
                                                            new Declaration[] { inner },
                                                            null,
+                                                           null,
                                                            IndexUtil.ConstraintType.EQUAL,
                                                            context.getDeclarationResolver().getDeclaration( context.getRule(), func.getBind() ),
                                                            accumDescr.isMultiFunction()
                                                                 ? new ArrayElementReader( arrayReader, index, function.getResultType() )
-                                                                : new SelfReferenceClassFieldReader( function.getResultType(), "this" ),
+                                                                : new SelfReferenceClassFieldReader( function.getResultType() ),
                                                            true);
                         ((MutableTypeConstraint) c).setType( Constraint.ConstraintType.BETA );
                         pattern.addConstraint( c );
@@ -258,7 +258,7 @@ public class MVELAccumulateBuilder
                     if (accumDescr.isMultiFunction()) {
                         declr.setReadAccessor(new ArrayElementReader(arrayReader, index, function.getResultType()));
                     } else {
-                        declr.setReadAccessor(new SelfReferenceClassFieldReader( function.getResultType(), "this" ));
+                        declr.setReadAccessor(new SelfReferenceClassFieldReader( function.getResultType() ));
                     }
                 }
             }

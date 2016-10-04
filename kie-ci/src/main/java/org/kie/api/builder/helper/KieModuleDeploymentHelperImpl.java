@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,18 @@
 
 package org.kie.api.builder.helper;
 
-import static org.kie.scanner.MavenRepository.getMavenRepository;
+import org.drools.compiler.kie.builder.impl.InternalKieModule;
+import org.drools.compiler.kproject.ReleaseIdImpl;
+import org.drools.core.util.IoUtils;
+import org.kie.api.KieBase;
+import org.kie.api.builder.KieBuilder;
+import org.kie.api.builder.KieFileSystem;
+import org.kie.api.builder.KieModule;
+import org.kie.api.builder.Message;
+import org.kie.api.builder.ReleaseId;
+import org.kie.api.builder.model.KieModuleModel;
+import org.kie.api.runtime.KieSession;
+import org.kie.scanner.MavenRepository;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -33,24 +44,13 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
-import org.drools.compiler.kie.builder.impl.InternalKieModule;
-import org.drools.compiler.kproject.ReleaseIdImpl;
-import org.drools.core.util.IoUtils;
-import org.kie.api.KieBase;
-import org.kie.api.builder.KieBuilder;
-import org.kie.api.builder.KieFileSystem;
-import org.kie.api.builder.KieModule;
-import org.kie.api.builder.Message;
-import org.kie.api.builder.ReleaseId;
-import org.kie.api.builder.model.KieModuleModel;
-import org.kie.api.runtime.KieSession;
-import org.kie.scanner.MavenRepository;
+import static org.kie.scanner.MavenRepository.getMavenRepository;
 
 /**
  * This is the main class where all interfaces and code comes together. 
  */
 final class KieModuleDeploymentHelperImpl extends FluentKieModuleDeploymentHelper implements SingleKieModuleDeploymentHelper {
-    
+
     /**
      * package scope: Because users will do very unexpected things.
      */
@@ -278,7 +278,7 @@ final class KieModuleDeploymentHelperImpl extends FluentKieModuleDeploymentHelpe
         }
     
         MavenRepository repository = getMavenRepository();
-        repository.deployArtifact(releaseId, kjar, pomFile);
+        repository.installArtifact(releaseId, kjar, pomFile);
     }
 
     /**
@@ -551,11 +551,10 @@ final class KieModuleDeploymentHelperImpl extends FluentKieModuleDeploymentHelpe
             int bangIndex = path.indexOf('!');
             String jarPath = path.substring("file:".length(), bangIndex);
             String classPath = path.substring(bangIndex+2); // no base /
-            
-            try { 
-                ZipFile zip = new ZipFile(new File(jarPath));
-                ZipEntry entry = zip.getEntry(classPath);
-                InputStream zipStream = zip.getInputStream(entry);
+            try (ZipFile zipFile = new ZipFile(new File(jarPath))) {
+                ZipEntry entry = zipFile.getEntry(classPath);
+                InputStream zipStream = zipFile.getInputStream(entry);
+                // the zipStream is closed as part of the readStream() method
                 classByteCode = readStream(zipStream);
             } catch (Exception e) {
                 throw new RuntimeException("Unable to read from " + jarPath, e);

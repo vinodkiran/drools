@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,8 @@ public class SingleObjectSinkAdapter extends AbstractObjectSinkAdapter {
 
     private static final long serialVersionUID = 510l;
 
-    protected ObjectSink      sink;
+    private ObjectSink      sink;
+    private ObjectSink[]    sinks;
 
     public SingleObjectSinkAdapter() {
         super( null );
@@ -41,12 +42,14 @@ public class SingleObjectSinkAdapter extends AbstractObjectSinkAdapter {
                                    final ObjectSink sink) {
         super( partitionId );
         this.sink = sink;
+        this.sinks = new ObjectSink[]{this.sink};
     }
 
     public void readExternal(ObjectInput in) throws IOException,
                                             ClassNotFoundException {
         super.readExternal( in );
-        sink = (ObjectSink) in.readObject();
+        this.sink = (ObjectSink) in.readObject();
+        this.sinks = new ObjectSink[]{this.sink};
     }
 
     public void writeExternal(ObjectOutput out) throws IOException {
@@ -130,14 +133,14 @@ public class SingleObjectSinkAdapter extends AbstractObjectSinkAdapter {
     }
 
     public BaseNode getMatchingNode(BaseNode candidate) {
-        if ( candidate.equals( sink ) ) {
+        if (sink.thisNodeEquals(candidate)) {
             return (BaseNode) sink;
         }
         return null;
     }
 
     public ObjectSink[] getSinks() {
-        return new ObjectSink[]{this.sink};
+        return sinks;
     }
 
     public int size() {

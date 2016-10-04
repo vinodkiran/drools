@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ public class ObjectTypeNode extends ObjectSource
     protected CompiledNetwork compiledNetwork;
 
     /* always dirty after serialisation */
-    protected transient boolean dirty;
+    private transient volatile boolean dirty;
 
     /* reset counter when dirty */
     protected transient IdGenerator idGenerator;
@@ -141,6 +141,8 @@ public class ObjectTypeNode extends ObjectSource
         }
 
         this.dirty = true;
+
+        hashcode = calculateHashCode();
     }
 
     private static class IdGenerator {
@@ -266,11 +268,15 @@ public class ObjectTypeNode extends ObjectSource
         propagateAssert(factHandle, context, workingMemory);
     }
 
-    private void checkDirty() {
+    protected void checkDirty() {
         if (dirty) {
-            resetIdGenerator();
-            updateTupleSinkId(this, this);
-            dirty = false;
+            synchronized (this) {
+                if (dirty) {
+                    resetIdGenerator();
+                    updateTupleSinkId( this, this );
+                    dirty = false;
+                }
+            }
         }
     }
 
@@ -320,22 +326,28 @@ public class ObjectTypeNode extends ObjectSource
     public static void doRetractObject(final InternalFactHandle factHandle,
                                        final PropagationContext context,
                                        final InternalWorkingMemory workingMemory) {
-        for (RightTuple rightTuple = factHandle.getFirstRightTuple(); rightTuple != null; ) {
+        retractRightTuples( factHandle, context, workingMemory );
+        retractLeftTuples( factHandle, context, workingMemory );
+    }
+
+    public static void retractLeftTuples( InternalFactHandle factHandle, PropagationContext context, InternalWorkingMemory workingMemory ) {
+        for ( LeftTuple leftTuple = factHandle.getFirstLeftTuple(); leftTuple != null; leftTuple = leftTuple.getHandleNext()) {
+            // must go via the LiaNode, so that the fact counter is updated, for linking
+            LeftTupleSink sink = leftTuple.getTupleSink();
+            ((LeftInputAdapterNode) sink.getLeftTupleSource()).retractLeftTuple( leftTuple,
+                                                                                 context,
+                                                                                 workingMemory );
+        }
+        factHandle.clearLeftTuples();
+    }
+
+    public static void retractRightTuples( InternalFactHandle factHandle, PropagationContext context, InternalWorkingMemory workingMemory ) {
+        for ( RightTuple rightTuple = factHandle.getFirstRightTuple(); rightTuple != null; ) {
             RightTuple nextRightTuple = rightTuple.getHandleNext();
-            rightTuple.getRightTupleSink().retractRightTuple(rightTuple,
-                                                             context,
-                                                             workingMemory);
+            rightTuple.retractTuple( context, workingMemory);
             rightTuple = nextRightTuple;
         }
         factHandle.clearRightTuples();
-
-        for (LeftTuple leftTuple = factHandle.getFirstLeftTuple(); leftTuple != null; leftTuple = leftTuple.getLeftParentNext()) {
-            // must go via the LiaNode, so that the fact counter is updated, for linking
-            ((LeftInputAdapterNode) leftTuple.getLeftTupleSink().getLeftTupleSource()).retractLeftTuple(leftTuple,
-                                                                                                        context,
-                                                                                                        workingMemory);
-        }
-        factHandle.clearLeftTuples();
     }
 
     protected void resetIdGenerator() {
@@ -447,7 +459,7 @@ public class ObjectTypeNode extends ObjectSource
                 Iterator<InternalFactHandle> it = memory.iterator();
                 while (it.hasNext()) {
                     InternalFactHandle handle = it.next();
-                    for (LeftTuple leftTuple = handle.getFirstLeftTuple(); leftTuple != null; leftTuple = leftTuple.getLeftParentNext()) {
+                    for (LeftTuple leftTuple = handle.getFirstLeftTuple(); leftTuple != null; leftTuple = leftTuple.getHandleNext()) {
                         adapter.cleanUp(leftTuple,
                                         workingMemory);
                     }
@@ -483,25 +495,21 @@ public class ObjectTypeNode extends ObjectSource
         return "[ObjectTypeNode(" + this.id + ")::" + ((EntryPointNode) this.source).getEntryPoint() + " objectType=" + this.objectType + " expiration=" + this.getExpirationOffset() + "ms ]";
     }
 
-    /**
-     * Uses he hashCode() of the underlying ObjectType implementation.
-     */
-    public int hashCode() {
-        return this.objectType.hashCode() ^ this.source.hashCode();
+    private int calculateHashCode() {
+        return (this.objectType != null ? this.objectType.hashCode() : 0) * 37 + (this.source != null ? this.source.hashCode() : 0) * 31;
     }
 
     public boolean equals(final Object object) {
-        if (this == object) {
-            return true;
-        }
+        return this == object ||
+               (internalEquals(object) && this.source.thisNodeEquals(((ObjectTypeNode) object).source));
+    }
 
-        if (object == null || !(object instanceof ObjectTypeNode)) {
+    @Override
+    protected boolean internalEquals( Object object ) {
+        if ( object == null || !(object instanceof ObjectTypeNode) || this.hashCode() != object.hashCode() ) {
             return false;
         }
-
-        final ObjectTypeNode other = (ObjectTypeNode) object;
-
-        return this.objectType.equals(other.objectType) && this.source.equals(other.source);
+        return this.objectType.equals( ((ObjectTypeNode)object).objectType );
     }
 
     /**

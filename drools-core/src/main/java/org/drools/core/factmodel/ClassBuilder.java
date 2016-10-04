@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,12 @@ package org.drools.core.factmodel;
 import org.kie.api.Service;
 import org.mvel2.asm.Opcodes;
 
-import java.beans.IntrospectionException;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 
 public interface ClassBuilder extends Opcodes, Service {
 
     public byte[] buildClass( ClassDefinition def, ClassLoader classLoader ) throws IOException,
-            IntrospectionException,
             SecurityException,
             IllegalArgumentException,
             ClassNotFoundException,

@@ -1,9 +1,9 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,11 +17,15 @@ package org.drools.compiler.compiler;
 
 import org.drools.compiler.lang.descr.BaseDescr;
 
+/**
+ * This Descr is used in jBPM code (jbpm-flow-builder) as part of the syntax tree
+ * for the scripts used in BPMN2 definitions.
+ */
 public class ReturnValueDescr extends BaseDescr {
     private String text;
-    
+
     public ReturnValueDescr() { }
-    
+
     public ReturnValueDescr(String text) {
         this.text = text;
     }

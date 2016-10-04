@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ package org.drools.reteoo.nodes;
 
 import org.drools.core.base.DroolsQuery;
 import org.drools.core.base.InternalViewChangedEventListener;
-import org.drools.core.base.extractors.ArrayElementReader;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalKnowledgeRuntime;
 import org.drools.core.common.InternalWorkingMemory;
@@ -40,14 +39,14 @@ import org.drools.core.reteoo.QueryElementNode;
 import org.drools.core.reteoo.QueryTerminalNode;
 import org.drools.core.reteoo.ReteooBuilder;
 import org.drools.core.reteoo.RightTuple;
+import org.drools.core.reteoo.RightTupleImpl;
 import org.drools.core.reteoo.RuleRemovalContext;
 import org.drools.core.reteoo.builder.BuildContext;
 import org.drools.core.rule.Declaration;
 import org.drools.core.rule.QueryElement;
 import org.drools.core.spi.PropagationContext;
 import org.drools.core.util.Iterator;
-import org.drools.core.util.index.RightTupleList;
-import org.kie.api.runtime.rule.Variable;
+import org.drools.core.util.index.TupleList;
 
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -81,7 +80,7 @@ public class ReteQueryElementNode extends QueryElementNode {
         InternalFactHandle handle = createFactHandle(context, workingMemory, leftTuple);
 
         DroolsQuery queryObject = createDroolsQuery(leftTuple, handle,
-                                                    null, null, null, null, null,
+                                                    null, null, null, null,
                                                     workingMemory);
 
         QueryInsertAction action = new QueryInsertAction(context,
@@ -120,7 +119,7 @@ public class ReteQueryElementNode extends QueryElementNode {
             return;
         }
 
-        InternalFactHandle handle = (InternalFactHandle) leftTuple.getObject();
+        InternalFactHandle handle = (InternalFactHandle) leftTuple.getContextObject();
         DroolsQuery queryObject = (DroolsQuery) handle.getObject();
         if (queryObject.getAction() != null) {
             // we already have an insert scheduled for this query, but have re-entered it
@@ -128,52 +127,7 @@ public class ReteQueryElementNode extends QueryElementNode {
             return;
         }
 
-        Object[] argTemplate = this.queryElement.getArgTemplate(); // an array of declr, variable and literals
-        Object[] args = new Object[argTemplate.length]; // the actual args, to be created from the  template
-
-        // first copy everything, so that we get the literals. We will rewrite the declarations and variables next
-        System.arraycopy(argTemplate,
-                         0,
-                         args,
-                         0,
-                         args.length);
-
-        int[] declIndexes = this.queryElement.getDeclIndexes();
-
-        for ( int declIndexe : declIndexes ) {
-            Declaration declr = (Declaration) argTemplate[declIndexe];
-
-            Object tupleObject = leftTuple.get( declr ).getObject();
-
-            Object o;
-
-            if ( tupleObject instanceof DroolsQuery ) {
-                // If the query passed in a Variable, we need to use it
-                ArrayElementReader arrayReader = (ArrayElementReader) declr.getExtractor();
-                if ( ( (DroolsQuery) tupleObject ).getVariables()[arrayReader.getIndex()] != null ) {
-                    o = Variable.v;
-                } else {
-                    o = declr.getValue( workingMemory,
-                                        tupleObject );
-                }
-            } else {
-                o = declr.getValue( workingMemory,
-                                    tupleObject );
-            }
-
-            args[declIndexe] = o;
-        }
-
-        int[] varIndexes = this.queryElement.getVariableIndexes();
-        for ( int varIndexe : varIndexes ) {
-            if ( argTemplate[varIndexe] == Variable.v ) {
-                // Need to check against the arg template, as the varIndexes also includes re-declared declarations
-                args[varIndexe] = Variable.v;
-            }
-        }
-
-        queryObject.setParameters(args);
-        ((ReteUnificationNodeViewChangedEventListener) queryObject.getQueryResultCollector()).setVariables(varIndexes);
+        queryObject.setParameters(getActualArguments( leftTuple, workingMemory ));
 
         QueryUpdateAction action = new QueryUpdateAction(context,
                                                          handle,
@@ -235,7 +189,7 @@ public class ReteQueryElementNode extends QueryElementNode {
 
                 while (childLeftTuple != null && childLeftTuple.getRightParent() == rightParent) {
                     // skip to the next child that has a different right parent
-                    childLeftTuple = childLeftTuple.getLeftParentNext();
+                    childLeftTuple = childLeftTuple.getHandleNext();
                 }
             }
         }
@@ -264,8 +218,8 @@ public class ReteQueryElementNode extends QueryElementNode {
                              PropagationContext context,
                              InternalWorkingMemory workingMemory) {
 
-            QueryTerminalNode node = (QueryTerminalNode) resultLeftTuple.getLeftTupleSink();
-            Declaration[] decls = node.getDeclarations();
+            QueryTerminalNode node = (QueryTerminalNode) resultLeftTuple.getTupleSink();
+            Declaration[] decls = node.getRequiredDeclarations();
             DroolsQuery dquery = (DroolsQuery) this.factHandle.getObject();
             Object[] objects = new Object[dquery.getElements().length];
 
@@ -288,9 +242,9 @@ public class ReteQueryElementNode extends QueryElementNode {
                                                                         // find the child tuples to iterate for evaluating the dquery results
                                                                         dquery.isOpen());
 
-            RightTupleList rightTuples = dquery.getResultInsertRightTupleList();
+            TupleList rightTuples = dquery.getResultInsertRightTupleList();
             if (rightTuples == null) {
-                rightTuples = new RightTupleList();
+                rightTuples = new TupleList();
                 dquery.setResultInsertRightTupleList(rightTuples);
                 QueryResultInsertAction evalAction = new QueryResultInsertAction(context,
                                                                                  this.factHandle,
@@ -305,10 +259,10 @@ public class ReteQueryElementNode extends QueryElementNode {
         }
 
         protected RightTuple createResultRightTuple(QueryElementFactHandle resultHandle, LeftTuple resultLeftTuple, boolean open) {
-            RightTuple rightTuple = new RightTuple(resultHandle);
+            RightTuple rightTuple = new RightTupleImpl(resultHandle);
             if (open) {
-                rightTuple.setLeftTuple(resultLeftTuple);
-                resultLeftTuple.setObject(rightTuple);
+                rightTuple.setBlocked( resultLeftTuple );
+                resultLeftTuple.setContextObject( rightTuple );
 
             }
             rightTuple.setPropagationContext(resultLeftTuple.getPropagationContext());
@@ -319,15 +273,15 @@ public class ReteQueryElementNode extends QueryElementNode {
                                final LeftTuple resultLeftTuple,
                                final PropagationContext context,
                                final InternalWorkingMemory workingMemory) {
-            RightTuple rightTuple = (RightTuple) resultLeftTuple.getObject();
-            rightTuple.setLeftTuple(null);
-            resultLeftTuple.setObject(null);
+            RightTuple rightTuple = (RightTuple) resultLeftTuple.getContextObject();
+            rightTuple.setBlocked( null );
+            resultLeftTuple.setContextObject( null );
 
             DroolsQuery query = (DroolsQuery) this.factHandle.getObject();
 
-            RightTupleList rightTuples = query.getResultRetractRightTupleList();
+            TupleList rightTuples = query.getResultRetractRightTupleList();
             if (rightTuples == null) {
-                rightTuples = new RightTupleList();
+                rightTuples = new TupleList();
                 query.setResultRetractRightTupleList(rightTuples);
                 QueryResultRetractAction retractAction = new QueryResultRetractAction(context,
                                                                                       this.factHandle,
@@ -345,18 +299,18 @@ public class ReteQueryElementNode extends QueryElementNode {
                                final LeftTuple resultLeftTuple,
                                final PropagationContext context,
                                final InternalWorkingMemory workingMemory) {
-            RightTuple rightTuple = (RightTuple) resultLeftTuple.getObject();
+            RightTuple rightTuple = (RightTuple) resultLeftTuple.getContextObject();
             if (rightTuple.getMemory() != null) {
                 // Already sheduled as an insert
                 return;
             }
 
-            rightTuple.setLeftTuple(null);
-            resultLeftTuple.setObject(null);
+            rightTuple.setBlocked( null );
+            resultLeftTuple.setContextObject( null );
 
             // We need to recopy everything back again, as we don't know what has or hasn't changed
-            QueryTerminalNode node = (QueryTerminalNode) resultLeftTuple.getLeftTupleSink();
-            Declaration[] decls = node.getDeclarations();
+            QueryTerminalNode node = (QueryTerminalNode) resultLeftTuple.getTupleSink();
+            Declaration[] decls = node.getRequiredDeclarations();
             InternalFactHandle rootHandle = resultLeftTuple.get(0);
             DroolsQuery dquery = (DroolsQuery) rootHandle.getObject();
 
@@ -375,15 +329,15 @@ public class ReteQueryElementNode extends QueryElementNode {
             handle.setObject(objects);
 
             if (dquery.isOpen()) {
-                rightTuple.setLeftTuple(resultLeftTuple);
-                resultLeftTuple.setObject(rightTuple);
+                rightTuple.setBlocked(resultLeftTuple);
+                resultLeftTuple.setContextObject( rightTuple );
             }
 
             // Don't need to recreate child links, as they will already be there form the first "add"
 
-            RightTupleList rightTuples = dquery.getResultUpdateRightTupleList();
+            TupleList rightTuples = dquery.getResultUpdateRightTupleList();
             if (rightTuples == null) {
-                rightTuples = new RightTupleList();
+                rightTuples = new TupleList();
                 dquery.setResultUpdateRightTupleList(rightTuples);
                 QueryResultUpdateAction updateAction = new QueryResultUpdateAction(context,
                                                                                    this.factHandle,
@@ -535,7 +489,7 @@ public class ReteQueryElementNode extends QueryElementNode {
         }
 
         public void execute(InternalWorkingMemory workingMemory) {
-            InternalFactHandle factHandle = (InternalFactHandle) leftTuple.getObject();
+            InternalFactHandle factHandle = (InternalFactHandle) leftTuple.getContextObject();
             if (node.isOpenQuery()) {
                 // iterate to the query terminal node, as the child leftTuples will get picked up there
                 workingMemory.getEntryPointNode().retractObject(factHandle,
@@ -595,17 +549,17 @@ public class ReteQueryElementNode extends QueryElementNode {
 
         public void execute(InternalWorkingMemory workingMemory) {
             DroolsQuery query = (DroolsQuery) factHandle.getObject();
-            RightTupleList rightTuples = query.getResultInsertRightTupleList();
+            TupleList rightTuples = query.getResultInsertRightTupleList();
             query.setResultInsertRightTupleList(null); // null so further operations happen on a new stack element
 
-            for (RightTuple rightTuple = rightTuples.getFirst(); rightTuple != null; ) {
+            for (RightTuple rightTuple = (RightTuple) rightTuples.getFirst(); rightTuple != null; ) {
                 RightTuple tmp = (RightTuple) rightTuple.getNext();
                 rightTuples.remove(rightTuple);
-                for (LeftTuple childLeftTuple = rightTuple.firstChild; childLeftTuple != null; childLeftTuple = (LeftTuple) childLeftTuple.getRightParentNext()) {
+                for (LeftTuple childLeftTuple = rightTuple.getFirstChild(); childLeftTuple != null; childLeftTuple = (LeftTuple) childLeftTuple.getRightParentNext()) {
                     node.getSinkPropagator().doPropagateAssertLeftTuple(context,
                                                                         workingMemory,
                                                                         childLeftTuple,
-                                                                        childLeftTuple.getLeftTupleSink());
+                                                                        (LeftTupleSink) childLeftTuple.getTupleSink());
                 }
                 rightTuple = tmp;
             }
@@ -658,10 +612,10 @@ public class ReteQueryElementNode extends QueryElementNode {
 
         public void execute(InternalWorkingMemory workingMemory) {
             DroolsQuery query = (DroolsQuery) factHandle.getObject();
-            RightTupleList rightTuples = query.getResultRetractRightTupleList();
+            TupleList rightTuples = query.getResultRetractRightTupleList();
             query.setResultRetractRightTupleList(null); // null so further operations happen on a new stack element
 
-            for (RightTuple rightTuple = rightTuples.getFirst(); rightTuple != null; ) {
+            for (RightTuple rightTuple = (RightTuple) rightTuples.getFirst(); rightTuple != null; ) {
                 RightTuple tmp = (RightTuple) rightTuple.getNext();
                 rightTuples.remove(rightTuple);
                 this.node.getSinkPropagator().propagateRetractRightTuple(rightTuple,
@@ -723,14 +677,14 @@ public class ReteQueryElementNode extends QueryElementNode {
 
         public void execute(InternalWorkingMemory workingMemory) {
             DroolsQuery query = (DroolsQuery) factHandle.getObject();
-            RightTupleList rightTuples = query.getResultUpdateRightTupleList();
+            TupleList rightTuples = query.getResultUpdateRightTupleList();
             query.setResultUpdateRightTupleList(null); // null so further operations happen on a new stack element
 
-            for (RightTuple rightTuple = rightTuples.getFirst(); rightTuple != null; ) {
+            for (RightTuple rightTuple = (RightTuple) rightTuples.getFirst(); rightTuple != null; ) {
                 RightTuple tmp = (RightTuple) rightTuple.getNext();
                 rightTuples.remove(rightTuple);
-                this.node.getSinkPropagator().propagateModifyChildLeftTuple(rightTuple.firstChild,
-                                                                            rightTuple.firstChild.getLeftParent(),
+                this.node.getSinkPropagator().propagateModifyChildLeftTuple(rightTuple.getFirstChild(),
+                                                                            rightTuple.getFirstChild().getLeftParent(),
                                                                             context,
                                                                             workingMemory,
                                                                             true);

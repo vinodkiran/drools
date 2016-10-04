@@ -7,13 +7,17 @@
   <parent>
     <groupId>org.drools</groupId>
     <artifactId>drools</artifactId>
-    <version>6.4.0-SNAPSHOT</version>
+    <version>7.0.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>drools-reteoo</artifactId>
   <packaging>bundle</packaging><!-- bundle = jar + OSGi metadata -->
 
   <name>Drools :: ReteOO</name>
+
+  <properties>
+    <osgi.Bundle-SymbolicName>org.drools.reteoo</osgi.Bundle-SymbolicName>
+  </properties>
 
   <dependencies>
     <!-- Internal dependencies -->
@@ -88,14 +92,12 @@
         <artifactId>maven-bundle-plugin</artifactId>
         <configuration>
           <instructions>
-            <Bundle-SymbolicName>org.drools.core</Bundle-SymbolicName>
             <Export-Package>
               org.drools.reteoo.*
             </Export-Package>
             <Import-Package>
               *
             </Import-Package>
-            <Bundle-Activator>org.drools.core.osgi.Activator</Bundle-Activator>
             <_removeheaders>Private-Package</_removeheaders>
           </instructions>
         </configuration>

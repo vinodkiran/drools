@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,6 +68,16 @@ public class ClassFieldImpl implements FieldValue, Externalizable {
 
         }
         return type;
+    }
+
+    @Override
+    public int hashCode() {
+        return className.hashCode();
+    }
+
+    @Override
+    public boolean equals( Object obj ) {
+        return obj instanceof ClassFieldImpl && className.equals( ( (ClassFieldImpl) obj ).className );
     }
 
     public char getCharValue() {

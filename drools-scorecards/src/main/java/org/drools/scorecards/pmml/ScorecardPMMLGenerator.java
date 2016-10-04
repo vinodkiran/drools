@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 JBoss Inc
+ * Copyright 2012 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -224,7 +224,7 @@ public class ScorecardPMMLGenerator {
                 }
                 output.getOutputFields().add(outputField);
 
-                if ( pmmlScorecard.isUseReasonCodes() ) {
+                if ( pmmlScorecard.getUseReasonCodes() ) {
                     OutputField reasonCodeField = new OutputField();
                     reasonCodeField.setDataType( DATATYPE.STRING );
                     reasonCodeField.setFeature( RESULTFEATURE.REASON_CODE );

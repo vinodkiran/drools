@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,7 +110,6 @@ public class MVELDialect
     protected static final SalienceBuilder               SALIENCE_BUILDER           = new MVELSalienceBuilder();
     protected static final EnabledBuilder                ENABLED_BUILDER            = new MVELEnabledBuilder();
     protected static final MVELEvalBuilder               EVAL_BUILDER               = new MVELEvalBuilder();
-    protected static final MVELPredicateBuilder          PREDICATE_BUILDER          = new MVELPredicateBuilder();
     protected static final MVELReturnValueBuilder        RETURN_VALUE_BUILDER       = new MVELReturnValueBuilder();
     protected static final MVELConsequenceBuilder        CONSEQUENCE_BUILDER        = new MVELConsequenceBuilder();
 
@@ -132,8 +131,6 @@ public class MVELDialect
     static {
         initBuilder();
     }
-
-    private static final MVELExprAnalyzer  analyzer     = new MVELExprAnalyzer();
 
     private final Map                      interceptors = MVELCompilationUnit.INTERCEPTORS;
 
@@ -510,12 +507,12 @@ public class MVELDialect
         BaseDescr temp = context.getParentDescr();
         context.setParentDescr( descr );
         try {
-            result = analyzer.analyzeExpression( context,
-                                                 (String) content,
-                                                 availableIdentifiers,
-                                                 localTypes,
-                                                 "drools",
-                                                 KnowledgeHelper.class );
+            result = MVELExprAnalyzer.analyzeExpression( context,
+                                                         (String) content,
+                                                         availableIdentifiers,
+                                                         localTypes,
+                                                         "drools",
+                                                         KnowledgeHelper.class );
         } catch ( final Exception e ) {
             DialectUtil.copyErrorLocation( e, descr );
             context.addError( new DescrBuildError( context.getParentDescr(),
@@ -548,12 +545,12 @@ public class MVELDialect
                                        String contextIndeifier,
                                        Class kcontextClass) {
 
-        return analyzer.analyzeExpression( context,
-                                           text,
-                                           availableIdentifiers,
-                                           localTypes,
-                                           contextIndeifier,
-                                           kcontextClass );
+        return MVELExprAnalyzer.analyzeExpression( context,
+                                                   text,
+                                                   availableIdentifiers,
+                                                   localTypes,
+                                                   contextIndeifier,
+                                                   kcontextClass );
     }
 
     public MVELCompilationUnit getMVELCompilationUnit(final String expression,
@@ -715,11 +712,7 @@ public class MVELDialect
     }
 
     public PredicateBuilder getPredicateBuilder() {
-        return PREDICATE_BUILDER;
-    }
-
-    public PredicateBuilder getExpressionPredicateBuilder() {
-        return PREDICATE_BUILDER;
+        throw new RuntimeException( "mvel PredicateBuilder is no longer in use" );
     }
 
     public SalienceBuilder getSalienceBuilder() {

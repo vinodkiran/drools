@@ -1,5 +1,5 @@
 /*
- * Copyright 2008 JBoss Inc
+ * Copyright 2008 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,7 +382,7 @@ public class FieldDefinition
         try {
             return initExpr == null ? 0L : Long.parseLong(initExpr);
         } catch (NumberFormatException nfe) {
-            return StringUtils.isEmpty( initExpr ) ? 0 : MVELSafeHelper.getEvaluator().eval( initExpr, Long.class );
+            return StringUtils.isEmpty( initExpr ) ? 0L : MVELSafeHelper.getEvaluator().eval( initExpr, Long.class );
         }
     }
     public Short getDefaultValueAsShort( ) {

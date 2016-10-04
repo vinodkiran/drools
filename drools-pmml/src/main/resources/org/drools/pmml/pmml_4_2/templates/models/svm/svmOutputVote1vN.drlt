@@ -1,6 +1,6 @@
 @comment{
 
-  Copyright 2011 JBoss Inc
+  Copyright 2011 Red Hat, Inc. and/or its affiliates.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ rule "SVM Output Collection @{context}"
 salience -1
 when
     accumulate( @{ pmmlPackageName }.@{context}SVMVote_@{target}( $wgt : weight ), $minWgt : min( $wgt ) )
-    @{ pmmlPackageName }.@{context}SVMVote_@{target}( $wgt : weight == $minWgt.doubleValue(), $out : outcome )
+    @{ pmmlPackageName }.@{context}SVMVote_@{target}( $wgt : weight == (Double) $minWgt, $out : outcome )
 then
     @{ target } x = new @{ target }();
                 x.setContext( "@{context}" );

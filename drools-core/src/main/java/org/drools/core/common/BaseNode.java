@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,12 @@ import org.drools.core.reteoo.EntryPointNode;
 import org.drools.core.reteoo.ReteooBuilder;
 import org.drools.core.reteoo.RuleRemovalContext;
 import org.drools.core.reteoo.builder.BuildContext;
-import org.drools.core.spi.RuleComponent;
+import org.drools.core.util.Bag;
 import org.kie.api.definition.rule.Rule;
 
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * The base class for all Rete nodes.
@@ -39,8 +37,10 @@ public abstract class BaseNode
     protected int                      id;
     protected RuleBasePartitionId      partitionId;
     protected boolean                  partitionsEnabled;
-    protected Map<Rule, RuleComponent> associations;
+    protected Bag<Rule>                associations;
     private   boolean                  streamMode;
+
+    protected int hashcode;
 
     public BaseNode() {
 
@@ -59,7 +59,7 @@ public abstract class BaseNode
         this.id = id;
         this.partitionId = partitionId;
         this.partitionsEnabled = partitionsEnabled;
-        this.associations = new HashMap<Rule, RuleComponent>();
+        this.associations = new Bag<Rule>();
     }
 
     @SuppressWarnings("unchecked")
@@ -68,8 +68,9 @@ public abstract class BaseNode
         id = in.readInt();
         partitionId = (RuleBasePartitionId) in.readObject();
         partitionsEnabled = in.readBoolean();
-        associations = (Map<Rule, RuleComponent>) in.readObject();
+        associations = (Bag<Rule>) in.readObject();
         streamMode = in.readBoolean();
+        hashcode = in.readInt();
     }
 
     public void writeExternal(ObjectOutput out) throws IOException {
@@ -78,6 +79,7 @@ public abstract class BaseNode
         out.writeBoolean( partitionsEnabled );
         out.writeObject( associations );
         out.writeBoolean( streamMode );
+        out.writeInt(hashcode);
     }
 
     /* (non-Javadoc)
@@ -99,10 +101,6 @@ public abstract class BaseNode
         this.streamMode = streamMode;
     }
 
-    public void attach() {
-        attach(null);
-    }
-
     /**
      * Attaches the node into the network. Usually to the parent <code>ObjectSource</code> or <code>TupleSource</code>
      */
@@ -111,7 +109,7 @@ public abstract class BaseNode
 
     /**
      * A method that is called for all nodes whose network below them
-     * changed, after the change is complete, providing them with an oportunity
+     * changed, after the change is complete, providing them with an opportunity
      * for state update
      */
     public abstract void networkUpdated(UpdateContext updateContext);
@@ -119,7 +117,6 @@ public abstract class BaseNode
     public boolean remove(RuleRemovalContext context,
                        ReteooBuilder builder,
                        InternalWorkingMemory[] workingMemories) {
-        this.removeAssociation( context.getRule() );
         boolean removed = doRemove( context, builder, workingMemories );
         if ( !this.isInUse() && !(this instanceof EntryPointNode) ) {
             builder.getIdGenerator().releaseId( this.getId() );
@@ -128,7 +125,7 @@ public abstract class BaseNode
     }
 
     /**
-     * Removes the node from teh network. Usually from the parent <code>ObjectSource</code> or <code>TupleSource</code>
+     * Removes the node from the network. Usually from the parent <code>ObjectSource</code> or <code>TupleSource</code>
      */
     protected abstract boolean doRemove(RuleRemovalContext context,
                                         ReteooBuilder builder,
@@ -138,13 +135,6 @@ public abstract class BaseNode
      * Returns true in case the current node is in use (is referenced by any other node)
      */
     public abstract boolean isInUse();
-
-    /**
-     * The hashCode return is simply the unique id of the node. It is expected that base classes will also implement equals(Object object).
-     */
-    public int hashCode() {
-        return this.id;
-    }
 
     public String toString() {
         return "[" + this.getClass().getSimpleName() + "(" + this.id + ")]";
@@ -165,26 +155,48 @@ public abstract class BaseNode
     }
 
     /**
-     * Creates an association between this node and the rule + rule component
-     * that caused the creation of this node. Since nodes might be shared,
-     * there might be more than one source for each node.
+     * Associates this node with the give rule
      */
-    public void addAssociation( Rule rule, RuleComponent component ) {
-        this.associations.put( rule, component );
+    public void addAssociation( Rule rule ) {
+        this.associations.add( rule );
     }
-    
-    /**
-     * Returns the map of associations for this node
-     */
-    public Map<Rule, RuleComponent> getAssociations() {
-        return this.associations;
+
+    public void addAssociation( BuildContext context, Rule rule ) {
+        addAssociation( rule );
     }
-    
+
     /**
      * Removes the association to the given rule from the
      * associations map.
      */
-    public void removeAssociation( Rule rule ) {
-        this.associations.remove(rule);
+    public boolean removeAssociation( Rule rule ) {
+        return this.associations.remove(rule);
+    }
+
+    public int getAssociationsSize() {
+        return this.associations.size();
+    }
+
+    public int getAssociatedRuleSize() {
+        return this.associations.getKeySize();
+    }
+
+    public int getAssociationsSize(Rule rule) {
+        return this.associations.sizeFor(rule);
+    }
+
+    public boolean isAssociatedWith( Rule rule ) {
+        return this.associations.contains( rule );
+    }
+
+    public boolean thisNodeEquals(final Object object) {
+        return this == object || internalEquals( object );
+    }
+
+    protected abstract boolean internalEquals( Object object );
+
+    @Override
+    public final int hashCode() {
+        return hashcode;
     }
 }

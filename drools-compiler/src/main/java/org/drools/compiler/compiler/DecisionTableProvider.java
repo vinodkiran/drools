@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,12 @@ import org.kie.api.Service;
 import org.kie.api.io.Resource;
 import org.kie.internal.builder.DecisionTableConfiguration;
 
-import java.io.InputStream;
 import java.util.List;
 
 public interface DecisionTableProvider extends Service {
 
-    String loadFromInputStream(InputStream is,
-                               DecisionTableConfiguration configuration);
+    String loadFromResource(Resource resource,
+                            DecisionTableConfiguration configuration);
 
     List<String> loadFromInputStreamWithTemplates(Resource resource,
                                                   DecisionTableConfiguration configuration);

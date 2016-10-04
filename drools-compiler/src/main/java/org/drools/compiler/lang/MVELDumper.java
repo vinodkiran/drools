@@ -151,13 +151,18 @@ public class MVELDumper extends ReflectiveVisitor implements ExpressionRewriter 
         String[] constrAndExpr = processImplicitConstraints( expr, atomicExpr, parent, parentIdx, context );
         // top-level, implicit constraints will be processed in different nodes.
         // Nested CCDs require all constraints to be evaluated locally, as a complex constraints
-        sbuilder.append( context.isCcdNested() ? constrAndExpr[ 0 ] + constrAndExpr[ 1 ] : constrAndExpr[ 1 ] );
+        expr = context.isCcdNested() ? constrAndExpr[ 0 ] + constrAndExpr[ 1 ] : constrAndExpr[ 1 ];
+        if (!atomicExpr.hasRewrittenExpression()) {
+            atomicExpr.setRewrittenExpression( expr );
+        }
+        sbuilder.append( expr );
         return constrAndExpr;
     }
 
     private void processBinding(StringBuilder sbuilder, BindingDescr bind, ConstraintConnectiveDescr parent, boolean isInsideRelCons, MVELDumperContext context) {
         String expr = bind.getExpression().trim();
         AtomicExprDescr atomicExpr = new AtomicExprDescr(expr);
+        atomicExpr.setResource(parent.getResource());
         String[] constrAndExpr = processImplicitConstraints(expr, atomicExpr, parent, parent.getDescrs().indexOf( bind ), context );
 
         if ( isInsideRelCons ) {
@@ -182,11 +187,12 @@ public class MVELDumper extends ReflectiveVisitor implements ExpressionRewriter 
                        processRightAtomicExpr(left, (AtomicExprDescr)red.getRight(), parent, idx, context) :
                        dump( new StringBuilder(), red.getRight(), parent, idx, Integer.MAX_VALUE, true, context).toString();
 
-        processRestriction( context,
-                            sbuilder,
-                            left.toString(),
-                            red.getOperatorDescr(),
-                            right );// maximum precedence, so wrap any child connective in parenthesis
+        String expr = processRestriction( context,
+                                          left.toString(),
+                                          red.getOperatorDescr(),
+                                          right );// maximum precedence, so wrap any child connective in parenthesis
+        red.setExpression( expr );
+        sbuilder.append( expr );
     }
 
     private String processRightAtomicExpr( StringBuilder left, AtomicExprDescr atomicExpr, ConstraintConnectiveDescr parent, int parentIdx, MVELDumperContext context ) {
@@ -445,11 +451,11 @@ public class MVELDumper extends ReflectiveVisitor implements ExpressionRewriter 
 
     }
 
-    public void processRestriction( MVELDumperContext context,
-                                    StringBuilder sbuilder,
-                                    String left,
-                                    OperatorDescr operator,
-                                    String right ) {
+    public String processRestriction( MVELDumperContext context,
+                                      String left,
+                                      OperatorDescr operator,
+                                      String right ) {
+        StringBuilder sbuilder = new StringBuilder();
         Operator op = Operator.determineOperator( operator.getOperator(),
                                                   operator.isNegated() );
         if ( op == Operator.determineOperator( "memberOf",
@@ -494,6 +500,7 @@ public class MVELDumper extends ReflectiveVisitor implements ExpressionRewriter 
             // rewrite operator as a function call
             rewriteOperator( context, sbuilder, left, operator, right );
         }
+        return sbuilder.toString();
     }
 
     protected void rewriteBasicOperator( StringBuilder sbuilder,

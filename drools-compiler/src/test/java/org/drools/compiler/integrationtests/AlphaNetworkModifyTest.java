@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ public class AlphaNetworkModifyTest extends CommonTestMethodBase {
         str += "global java.util.List list \n";
         str += "rule x1 \n";
         str += "when \n";
-        str += "    $pe : Person() from list\n";  
+        str += "    $pe : Person() from list\n";
         str += "then \n";
         str += "end  \n";
         str += "rule x2 \n";
@@ -120,7 +120,7 @@ public class AlphaNetworkModifyTest extends CommonTestMethodBase {
         str += "end  \n";        
         str += "rule x3 \n";
         str += "when \n";
-        str += "    $ch : Cheese() from list\n"; 
+        str += "    $ch : Cheese() from list\n";
         str += "then \n";
         str += "end  \n";        
         str += "rule x4 \n";
@@ -137,15 +137,14 @@ public class AlphaNetworkModifyTest extends CommonTestMethodBase {
 
         ObjectTypeNode otnInit = getObjectTypeNode(kbase, "InitialFactImpl" );
         
-        LeftInputAdapterNode liaNode = ( LeftInputAdapterNode ) otnInit.getSinkPropagator().getSinks()[0];
+        LeftInputAdapterNode liaNode = ( LeftInputAdapterNode ) otnInit.getObjectSinkPropagator().getSinks()[0];
         
         LeftTupleSink[] sinks = liaNode.getSinkPropagator().getSinks();
         
+        assertEquals(2, sinks.length );
         assertEquals(0, sinks[0].getLeftInputOtnId().getId() );
         assertEquals(1, sinks[1].getLeftInputOtnId().getId() );
-        assertEquals(2, sinks[2].getLeftInputOtnId().getId() );
-        assertEquals(3, sinks[3].getLeftInputOtnId().getId() );
-    }        
+    }
     
     @Test
     public void testModifyWithLiaToAcc() {
@@ -191,7 +190,7 @@ public class AlphaNetworkModifyTest extends CommonTestMethodBase {
         
         ObjectTypeNode otnInit = getObjectTypeNode(kbase, "InitialFactImpl" );
         
-        LeftInputAdapterNode liaNode = ( LeftInputAdapterNode ) otnInit.getSinkPropagator().getSinks()[0];
+        LeftInputAdapterNode liaNode = ( LeftInputAdapterNode ) otnInit.getObjectSinkPropagator().getSinks()[0];
         
         LeftTupleSink[] sinks = liaNode.getSinkPropagator().getSinks();
         

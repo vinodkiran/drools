@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,6 +105,10 @@ public class GuidedDTXMLPersistence {
         xt.alias( "valueNumeric",
                   Number.class,
                   BigDecimal.class );
+
+        // this is needed for OSGi as XStream needs to be able to load classes from the guided-dtable module
+        // and the default classloader for XStream bundle in OSGi does not have access to those classes
+        xt.setClassLoader( getClass().getClassLoader() );
     }
 
     public static GuidedDTXMLPersistence getInstance() {

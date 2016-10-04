@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,8 +55,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.drools.compiler.rule.builder.PatternBuilder.buildAnalysis;
-import static org.drools.compiler.rule.builder.PatternBuilder.getUsedDeclarations;
+import static org.drools.compiler.rule.builder.PatternBuilder.*;
 import static org.drools.compiler.rule.builder.dialect.DialectUtil.copyErrorLocation;
 import static org.drools.core.util.ClassUtils.convertFromPrimitiveType;
 
@@ -106,7 +105,8 @@ public class MVELConstraintBuilder implements ConstraintBuilder {
                                               String rightValue,
                                               InternalReadAccessor extractor,
                                               Declaration requiredDeclaration,
-                                              RelationalExprDescr relDescr) {
+                                              RelationalExprDescr relDescr,
+                                              Map<String, OperatorDescr> aliases) {
         if (!isMvelOperator(operatorDescr.getOperator())) {
             if (requiredDeclaration == null) {
                 return null;
@@ -132,21 +132,38 @@ public class MVELConstraintBuilder implements ConstraintBuilder {
         boolean isUnification = requiredDeclaration != null &&
                                 requiredDeclaration.getPattern().getObjectType().equals( new ClassObjectType( DroolsQuery.class ) ) &&
                                 Operator.EQUAL.getOperatorString().equals( operatorDescr.getOperator() );
-        if (isUnification) {
+        boolean canBuildCompilationUnit = true;
+        if (isUnification && leftValue.equals(rightValue)) {
             expression = resolveUnificationAmbiguity(expression, declarations, leftValue, rightValue);
+            canBuildCompilationUnit = false; // TODO: expression rewriting doesn't allow to create a compilation unit
         }
+
         expression = normalizeMVELVariableExpression(expression, leftValue, rightValue, relDescr);
         IndexUtil.ConstraintType constraintType = IndexUtil.ConstraintType.decode(operatorDescr.getOperator());
-        MVELCompilationUnit compilationUnit = isUnification ? null : buildCompilationUnit(context, pattern, expression, null);
-        return new MvelConstraint( Collections.singletonList( context.getPkg().getName() ), expression, declarations, compilationUnit, constraintType, requiredDeclaration, extractor, isUnification);
+        MVELCompilationUnit compilationUnit = isUnification ? null : buildCompilationUnit(context, pattern, expression, aliases);
+        EvaluatorWrapper[] operators = getOperators(buildOperators(context, pattern, relDescr, aliases));
+        return new MvelConstraint( Collections.singletonList( context.getPkg().getName() ), expression, declarations, operators, compilationUnit, constraintType, requiredDeclaration, extractor, isUnification);
     }
 
-    public Constraint buildMvelConstraint(String packageName, String expression, Declaration[] declarations, MVELCompilationUnit compilationUnit, boolean isDynamic) {
-        return new MvelConstraint( packageName, expression, declarations, compilationUnit, isDynamic );
+    public Constraint buildMvelConstraint(String packageName,
+                                          String expression,
+                                          Declaration[] declarations,
+                                          EvaluatorWrapper[] operators,
+                                          MVELCompilationUnit compilationUnit,
+                                          boolean isDynamic) {
+        return new MvelConstraint( packageName, expression, declarations, operators, compilationUnit, isDynamic );
     }
 
-    public Constraint buildMvelConstraint(Collection<String> packageName, String expression, Declaration[] declarations, MVELCompilationUnit compilationUnit, IndexUtil.ConstraintType constraintType, Declaration indexingDeclaration, InternalReadAccessor extractor, boolean isUnification) {
-        return new MvelConstraint( packageName, expression, declarations, compilationUnit, constraintType, indexingDeclaration, extractor, isUnification );
+    public Constraint buildMvelConstraint(Collection<String> packageNames,
+                                          String expression,
+                                          Declaration[] declarations,
+                                          EvaluatorWrapper[] operators,
+                                          MVELCompilationUnit compilationUnit,
+                                          IndexUtil.ConstraintType constraintType,
+                                          Declaration indexingDeclaration,
+                                          InternalReadAccessor extractor,
+                                          boolean isUnification) {
+        return new MvelConstraint( packageNames, expression, declarations, operators, compilationUnit, constraintType, indexingDeclaration, extractor, isUnification );
     }
 
     public Constraint buildLiteralConstraint(RuleBuildContext context,
@@ -158,7 +175,8 @@ public class MVELConstraintBuilder implements ConstraintBuilder {
                                              String operator,
                                              String rightValue,
                                              InternalReadAccessor extractor,
-                                             LiteralRestrictionDescr restrictionDescr) {
+                                             LiteralRestrictionDescr restrictionDescr,
+                                             Map<String, OperatorDescr> aliases) {
         if (!isMvelOperator(operator)) {
             Evaluator evaluator = buildLiteralEvaluator(context, extractor, restrictionDescr, vtype);
             if (evaluator != null && evaluator.isTemporal()) {
@@ -177,22 +195,20 @@ public class MVELConstraintBuilder implements ConstraintBuilder {
 
         String mvelExpr = normalizeMVELLiteralExpression(vtype, field, expression, leftValue, operator, rightValue, restrictionDescr);
         IndexUtil.ConstraintType constraintType = IndexUtil.ConstraintType.decode(operator);
-        MVELCompilationUnit compilationUnit = buildCompilationUnit(context, pattern, mvelExpr, null);
-        return new MvelConstraint(context.getPkg().getName(), mvelExpr, compilationUnit, constraintType, field, extractor);
+        MVELCompilationUnit compilationUnit = buildCompilationUnit(context, pattern, mvelExpr, aliases);
+        EvaluatorWrapper[] operators = getOperators(buildOperators(context, pattern, restrictionDescr, aliases));
+        return new MvelConstraint(context.getPkg().getName(), mvelExpr, compilationUnit, constraintType, field, extractor, operators);
     }
 
     protected static String resolveUnificationAmbiguity(String expr, Declaration[] declrations, String leftValue, String rightValue) {
         // resolve ambiguity between variable and bound value with the same name in unifications
-        if (leftValue.equals(rightValue)) {
-            rightValue = rightValue + "__";
-            for (Declaration declaration : declrations) {
-                if (declaration.getIdentifier().equals(leftValue)) {
-                    declaration.setBindingName(rightValue);
-                }
+        rightValue = rightValue + "__";
+        for (Declaration declaration : declrations) {
+            if (declaration.getIdentifier().equals(leftValue)) {
+                declaration.setBindingName(rightValue);
             }
-            expr = leftValue + " == " + rightValue;
         }
-        return expr;
+        return leftValue + " == " + rightValue;
     }
 
     protected static String normalizeMVELLiteralExpression(ValueType vtype,
@@ -203,23 +219,32 @@ public class MVELConstraintBuilder implements ConstraintBuilder {
                                                            String rightValue,
                                                            LiteralRestrictionDescr restrictionDescr) {
         if (vtype == ValueType.DATE_TYPE) {
-            Date date = (Date)field.getValue();
-            return leftValue + " " + operator + (date != null ? " new java.util.Date(" + date.getTime() + ")" : " null");
+            return normalizeDate( field, leftValue, operator );
         }
         if (operator.equals("str")) {
-            String method = restrictionDescr.getParameterText();
-            if (method.equals("length")) {
-                return leftValue + ".length()" + (restrictionDescr.isNegated() ? " != " : " == ") + rightValue;
-            }
-            return (restrictionDescr.isNegated() ? "!" : "") + leftValue + "." + method + "(" + rightValue + ")";
+            return normalizeStringOperator( leftValue, rightValue, restrictionDescr );
         }
-
         // resolve ambiguity between mvel's "empty" keyword and constraints like: List(empty == ...)
-        if (expr.startsWith("empty") && (operator.equals("==") || operator.equals("!=")) && !Character.isJavaIdentifierPart(expr.charAt(5))) {
-            expr = "isEmpty()" + expr.substring(5);
-        }
+        return normalizeEmptyKeyword( expr, operator );
+    }
 
-        return expr;
+    protected static String normalizeDate( FieldValue field, String leftValue, String operator ) {
+        Date date = (Date)field.getValue();
+        return leftValue + " " + operator + (date != null ? " new java.util.Date(" + date.getTime() + ")" : " null");
+    }
+
+    protected static String normalizeStringOperator( String leftValue, String rightValue, LiteralRestrictionDescr restrictionDescr ) {
+        String method = restrictionDescr.getParameterText();
+        if (method.equals("length")) {
+            return leftValue + ".length()" + (restrictionDescr.isNegated() ? " != " : " == ") + rightValue;
+        }
+        return (restrictionDescr.isNegated() ? "!" : "") + leftValue + "." + method + "(" + rightValue + ")";
+    }
+
+    protected static String normalizeEmptyKeyword( String expr, String operator ) {
+        return expr.startsWith("empty") && (operator.equals("==") || operator.equals("!=")) && !Character.isJavaIdentifierPart(expr.charAt(5)) ?
+               "isEmpty()" + expr.substring(5) :
+               expr;
     }
 
     protected static String normalizeMVELVariableExpression(String expr,

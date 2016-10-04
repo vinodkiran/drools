@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ public class Door extends Thing {
     private Key key;
 
     public Door(Room fromRoom, Room toRoom) {
-        super( "Door from " + fromRoom.getName() +" to "+ toRoom.toString() );
+        super( "Door from " + fromRoom.getName() +" to "+ toRoom.toString(), false );
         this.fromRoom = fromRoom;
         this.toRoom = toRoom;
         lockStatus = LockStatus.UNLOCKED;

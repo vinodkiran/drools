@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,9 @@
 
 package org.drools.compiler.integrationtests;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
-import java.util.concurrent.TimeUnit;
-
 import org.drools.core.time.SessionPseudoClock;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.kie.api.KieServices;
 import org.kie.api.builder.KieFileSystem;
@@ -36,6 +30,11 @@ import org.kie.api.runtime.rule.EntryPoint;
 import org.kie.api.runtime.rule.QueryResults;
 import org.kie.internal.io.ResourceFactory;
 
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 public class QueryCepTest {
     
     private KieSession ksession;
@@ -46,9 +45,9 @@ public class QueryCepTest {
 
     @Before
     public void prepare() {
-        String drl = "package org.drools.compiler.integrationtests\n" + 
-                "import org.drools.compiler.integrationtests.QueryCepTest.TestEvent\n" + 
-                "declare TestEvent\n" + 
+        String drl = "package org.drools.compiler.integrationtests\n" +
+                "import " + TestEvent.class.getCanonicalName() + "\n" +
+                "declare TestEvent\n" +
                 "    @role( event )\n" + 
                 "end\n" + 
                 "query EventsFromStream\n" + 

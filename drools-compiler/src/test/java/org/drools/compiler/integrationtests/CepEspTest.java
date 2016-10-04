@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import org.drools.core.WorkingMemory;
 import org.drools.core.audit.WorkingMemoryFileLogger;
 import org.drools.core.base.ClassObjectType;
 import org.drools.core.base.evaluators.TimeIntervalParser;
+import org.drools.core.common.DefaultFactHandle;
 import org.drools.core.common.EventFactHandle;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.NamedEntryPoint;
@@ -54,7 +55,9 @@ import org.kie.api.builder.model.KieBaseModel;
 import org.kie.api.builder.model.KieModuleModel;
 import org.kie.api.conf.EqualityBehaviorOption;
 import org.kie.api.conf.EventProcessingOption;
+import org.kie.api.definition.type.Expires;
 import org.kie.api.definition.type.FactType;
+import org.kie.api.definition.type.Role;
 import org.kie.api.event.rule.AfterMatchFiredEvent;
 import org.kie.api.event.rule.AgendaEventListener;
 import org.kie.api.event.rule.DebugAgendaEventListener;
@@ -115,7 +118,7 @@ public class CepEspTest extends CommonTestMethodBase {
                  "   @timestamp( getProperties().get( 'timestamp' )-1 ) \n" +
                  "   @duration( getProperties().get( 'duration' )+1 ) \n" +
                 "end\n";
-        
+
         KnowledgeBase kbase = loadKnowledgeBaseFromString( rule );
         StatefulKnowledgeSession ksession = createKnowledgeSession(kbase);
         Message msg = new Message();
@@ -487,9 +490,8 @@ public class CepEspTest extends CommonTestMethodBase {
 
         // read in the source
         TypeDeclaration factType = ((KnowledgeBaseImpl)kbase).getTypeDeclaration( StockTick.class );
-        final TimeIntervalParser parser = new TimeIntervalParser();
 
-        assertEquals( parser.parse( "1h30m" )[0].longValue(),
+        assertEquals( TimeIntervalParser.parse( "1h30m" )[0],
                       factType.getExpirationOffset() );
     }
 
@@ -500,7 +502,6 @@ public class CepEspTest extends CommonTestMethodBase {
         kbc.setOption( EventProcessingOption.STREAM );
         KnowledgeBase kbase = loadKnowledgeBase( kbc, "test_CEP_EventExpiration2.drl" );
 
-        final TimeIntervalParser parser = new TimeIntervalParser();
 
         Map<ObjectType, ObjectTypeNode> objectTypeNodes = ((KnowledgeBaseImpl)kbase).getRete().getObjectTypeNodes( EntryPointId.DEFAULT );
         ObjectTypeNode node = objectTypeNodes.get( new ClassObjectType( StockTick.class ) );
@@ -508,7 +509,7 @@ public class CepEspTest extends CommonTestMethodBase {
         assertNotNull( node );
 
         // the expiration policy @expires(10m) should override the temporal operator usage 
-        assertEquals( parser.parse( "10m" )[0].longValue() + 1,
+        assertEquals( TimeIntervalParser.parse( "10m" )[0] + 1,
                       node.getExpirationOffset() );
     }
 
@@ -519,15 +520,13 @@ public class CepEspTest extends CommonTestMethodBase {
         conf.setOption( EventProcessingOption.STREAM );
         final KnowledgeBase kbase = loadKnowledgeBase( conf, "test_CEP_EventExpiration3.drl" );
         
-        final TimeIntervalParser parser = new TimeIntervalParser();
-
         Map<ObjectType, ObjectTypeNode> objectTypeNodes = ((KnowledgeBaseImpl)kbase).getRete().getObjectTypeNodes( EntryPointId.DEFAULT );
         ObjectTypeNode node = objectTypeNodes.get( new ClassObjectType( StockTick.class ) );
 
         assertNotNull( node );
 
         // the expiration policy @expires(10m) should override the temporal operator usage 
-        assertEquals( parser.parse( "10m" )[0].longValue() + 1,
+        assertEquals( TimeIntervalParser.parse( "10m" )[0] + 1,
                       node.getExpirationOffset() );
     }
 
@@ -2961,7 +2960,6 @@ public class CepEspTest extends CommonTestMethodBase {
     }
 
     @Test
-    @Ignore
     public void testLeakingActivationsWithDetachedExpiredNonCancelling() throws Exception {
         // JBRULES-3558 - DROOLS 311
         // TODO: it is still possible to get multiple insertions of the Recording object
@@ -4211,7 +4209,7 @@ public class CepEspTest extends CommonTestMethodBase {
                      "  accumulate ( $e: StockTick() over window:length(10), $n : count($e) )\n" +
                      "then\n" +
                      "  list.add( $n ); \n" +
-                     "  System.out.println( \"Events in last 3 seconds: \" + $n );\n" +
+                     "  System.out.println( \"Events in last X seconds: \" + $n );\n" +
                      "end" +
                      "";
 
@@ -5558,5 +5556,839 @@ public class CepEspTest extends CommonTestMethodBase {
 
         ksession.insert( new HashMap<String, Object>() );
         ksession.fireAllRules();
+    }
+
+    @Test
+    public void testDisconnectedEventFactHandle() {
+        // DROOLS-924
+        String drl =
+                "declare String \n"+
+                "  @role(event)\n"+
+                "end\n";
+
+        KieSession ksession = new KieHelper().addContent( drl, ResourceType.DRL )
+                                             .build()
+                                             .newKieSession();
+
+        DefaultFactHandle helloHandle = (DefaultFactHandle) ksession.insert( "hello" );
+        DefaultFactHandle goodbyeHandle = (DefaultFactHandle) ksession.insert( "goodbye" );
+
+        FactHandle key = DefaultFactHandle.createFromExternalFormat( helloHandle.toExternalForm() );
+        assertTrue("FactHandle not deserialized as EventFactHandle", key instanceof EventFactHandle);
+        assertEquals( "hello",
+                      ksession.getObject( key ) );
+
+        key = DefaultFactHandle.createFromExternalFormat( goodbyeHandle.toExternalForm() );
+        assertTrue("FactHandle not deserialized as EventFactHandle", key instanceof EventFactHandle);
+        assertEquals( "goodbye",
+                      ksession.getObject( key ) );
+    }
+
+    @Test
+    public void testEventWithShortExpiration() throws InterruptedException {
+        // DROOLS-921
+        String drl = "declare String\n" +
+                     "  @expires( 1ms )\n" +
+                     "  @role( event )\n" +
+                     "end\n" +
+                     "\n" +
+                     "rule R when\n" +
+                     "  String( )\n" +
+                     "then\n" +
+                     "end\n";
+
+        KieSession ksession = new KieHelper().addContent( drl, ResourceType.DRL )
+                                             .build( EventProcessingOption.STREAM )
+                                             .newKieSession();
+
+        ksession.insert( "test" );
+        assertEquals( 1, ksession.fireAllRules() );
+        waitBusy(2L);
+        assertEquals( 0, ksession.fireAllRules() );
+        waitBusy(30L);
+        // Expire action is put into propagation queue by timer job, so there
+        // can be a race condition where it puts it there right after previous fireAllRules
+        // flushes the queue. So there needs to be another flush -> another fireAllRules
+        // to flush the queue.
+        assertEquals( 0, ksession.fireAllRules() );
+        assertEquals( 0, ksession.getObjects().size() );
+    }
+
+    @Test
+    public void testDeleteExpiredEvent() throws Exception {
+        // BZ-1274696
+        String drl =
+                "import " + StockTick.class.getCanonicalName() + "\n" +
+                "declare StockTick\n" +
+                "    @role( event )\n" +
+                "end\n" +
+                "\n" +
+                "rule \"TestEventReceived\"\n" +
+                "no-loop\n" +
+                "when\n" +
+                "  $st1 : StockTick( company == \"ACME\" )\n" +
+                "  not ( StockTick( this != $st1, this after[0s, 1s] $st1) )\n" +
+                "then\n" +
+                "  delete($st1);\n" +
+                "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+        PseudoClockScheduler clock = ksession.getSessionClock();
+
+        EventFactHandle handle1 = (EventFactHandle) ksession.insert( new StockTick( 1, "ACME", 50 ) );
+
+        ksession.fireAllRules();
+
+        clock.advanceTime( 2, TimeUnit.SECONDS );
+        ksession.fireAllRules();
+
+        assertTrue( handle1.isExpired() );
+        assertFalse( ksession.getFactHandles().contains( handle1 ) );
+    }
+
+    @Test
+    public void testDeleteExpiredEventWithTimestampAndEqualityKey() throws Exception {
+        // DROOLS-1017
+        String drl =
+                "import " + StockTick.class.getCanonicalName() + "\n" +
+                "declare StockTick\n" +
+                "    @role( event )\n" +
+                "    @timestamp( time )\n" +
+                "end\n" +
+                "\n" +
+                "rule \"TestEventReceived\"\n" +
+                "when\n" +
+                "  $st1 : StockTick( company == \"ACME\" )\n" +
+                "  not ( StockTick( this != $st1, this after[0s, 1s] $st1) )\n" +
+                "then\n" +
+                "  delete($st1);\n" +
+                "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM, EqualityBehaviorOption.EQUALITY );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+
+        PseudoClockScheduler clock = ksession.getSessionClock();
+        clock.setStartupTime(5000L);
+
+        EventFactHandle handle1 = (EventFactHandle) ksession.insert( new StockTick( 1, "ACME", 50, 0L ) );
+
+        clock.advanceTime( 2, TimeUnit.SECONDS );
+        ksession.fireAllRules();
+
+        assertTrue( handle1.isExpired() );
+        assertFalse( ksession.getFactHandles().contains( handle1 ) );
+    }
+
+    @Test
+    public void testSerializationWithWindowLength() throws Exception {
+        // DROOLS-953
+        String drl =
+                "import " + StockTick.class.getCanonicalName() + "\n" +
+                "global java.util.List list\n" +
+                "declare StockTick\n" +
+                "    @role( event )\n" +
+                "end\n" +
+                "\n" +
+                "rule ReportLastEvent when\n" +
+                "    $e : StockTick() over window:length(1)\n" +
+                "then\n" +
+                "    list.add($e.getCompany());\n" +
+                "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+        PseudoClockScheduler clock = ksession.getSessionClock();
+
+        List<String> list = new ArrayList<String>();
+        ksession.setGlobal( "list", list );
+
+        ksession.insert( new StockTick( 1, "ACME", 50 ) );
+        ksession.insert( new StockTick( 2, "DROO", 50 ) );
+        ksession.insert( new StockTick( 3, "JBPM", 50 ) );
+        ksession.fireAllRules();
+
+        assertEquals(1, list.size());
+        assertEquals("JBPM", list.get(0));
+
+        try {
+            ksession = SerializationHelper.getSerialisedStatefulKnowledgeSession( ksession, true, false );
+        } catch ( Exception e ) {
+            e.printStackTrace();
+            fail( e.getMessage() );
+        }
+
+        list = new ArrayList<String>();
+        ksession.setGlobal( "list", list );
+
+        ksession.fireAllRules();
+        System.out.println(list);
+        assertEquals(0, list.size());
+    }
+
+    @Test
+    public void testSerializationWithWindowLengthAndLiaSharing() throws Exception {
+        // DROOLS-953
+        String drl =
+                "import " + StockTick.class.getCanonicalName() + "\n" +
+                "global java.util.List list\n" +
+                "declare StockTick\n" +
+                "    @role( event )\n" +
+                "end\n" +
+                "\n" +
+                "rule ReportLastEvent when\n" +
+                "    $e : StockTick() over window:length(1)\n" +
+                "then\n" +
+                "    list.add($e.getCompany());\n" +
+                "end\n" +
+                "\n" +
+                "rule ReportEventInserted when\n" +
+                "   $e : StockTick()\n" +
+                "then\n" +
+                "   System.out.println(\"Event Insert : \" + $e);\n" +
+                "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+        PseudoClockScheduler clock = ksession.getSessionClock();
+
+        List<String> list = new ArrayList<String>();
+        ksession.setGlobal( "list", list );
+
+        ksession.insert( new StockTick( 1, "ACME", 50 ) );
+        ksession.insert( new StockTick( 2, "DROO", 50 ) );
+        ksession.insert( new StockTick( 3, "JBPM", 50 ) );
+        ksession.fireAllRules();
+
+        assertEquals(1, list.size());
+        assertEquals("JBPM", list.get(0));
+
+        try {
+            ksession = SerializationHelper.getSerialisedStatefulKnowledgeSession( ksession, true, false );
+        } catch ( Exception e ) {
+            e.printStackTrace();
+            fail( e.getMessage() );
+        }
+
+        list = new ArrayList<String>();
+        ksession.setGlobal( "list", list );
+
+        ksession.fireAllRules();
+        System.out.println(list);
+        assertEquals(0, list.size());
+    }
+
+    @Test
+    public void testSerializationBeforeFireWithWindowLength() throws Exception {
+        // DROOLS-953
+        String drl =
+                "import " + StockTick.class.getCanonicalName() + "\n" +
+                "global java.util.List list\n" +
+                "declare StockTick\n" +
+                "    @role( event )\n" +
+                "end\n" +
+                "\n" +
+                "rule ReportLastEvent when\n" +
+                "    $e : StockTick() over window:length(1)\n" +
+                "then\n" +
+                "    list.add($e.getCompany());\n" +
+                "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+        PseudoClockScheduler clock = ksession.getSessionClock();
+
+        List<String> list = new ArrayList<String>();
+        ksession.setGlobal( "list", list );
+
+        ksession.insert( new StockTick( 1, "ACME", 50 ) );
+        ksession.insert( new StockTick( 2, "DROO", 50 ) );
+        ksession.insert( new StockTick( 3, "JBPM", 50 ) );
+
+        try {
+            ksession = SerializationHelper.getSerialisedStatefulKnowledgeSession( ksession, true, false );
+        } catch ( Exception e ) {
+            e.printStackTrace();
+            fail( e.getMessage() );
+        }
+
+        list = new ArrayList<String>();
+        ksession.setGlobal( "list", list );
+
+        ksession.fireAllRules();
+        System.out.println(list);
+        assertEquals(1, list.size());
+        assertEquals("JBPM", list.get(0));
+    }
+
+    @Test
+    public void testSubclassWithLongerExpirationThanSuper() throws Exception {
+        // DROOLS-983
+        String drl =
+                "import " + SuperClass.class.getCanonicalName() + "\n" +
+                "import " + SubClass.class.getCanonicalName() + "\n" +
+                "\n" +
+                "rule R1 when\n" +
+                "    $e : SuperClass()\n" +
+                "then\n" +
+                "end\n" +
+                "rule R2 when\n" +
+                "    $e : SubClass()\n" +
+                "    not SubClass(this != $e)\n" +
+                "then\n" +
+                "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+        PseudoClockScheduler clock = ksession.getSessionClock();
+
+        EventFactHandle handle1 = (EventFactHandle) ksession.insert(new SubClass());
+        ksession.fireAllRules();
+
+        clock.advanceTime(15, TimeUnit.SECONDS);
+        ksession.fireAllRules();
+        assertFalse(handle1.isExpired());
+        assertEquals( 1, ksession.getObjects().size() );
+
+        clock.advanceTime(10, TimeUnit.SECONDS);
+        ksession.fireAllRules();
+        assertTrue(handle1.isExpired());
+        assertEquals( 0, ksession.getObjects().size() );
+    }
+
+    @Test
+    public void testSubclassWithLongerExpirationThanSuperWithSerialization() throws Exception {
+        // DROOLS-983
+        String drl =
+                "import " + SuperClass.class.getCanonicalName() + "\n" +
+                "import " + SubClass.class.getCanonicalName() + "\n" +
+                "\n" +
+                "rule R1 when\n" +
+                "    $e : SuperClass()\n" +
+                "then\n" +
+                "end\n" +
+                "rule R2 when\n" +
+                "    $e : SubClass()\n" +
+                "    not SubClass(this != $e)\n" +
+                "then\n" +
+                "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+        PseudoClockScheduler clock = ksession.getSessionClock();
+
+        EventFactHandle handle1 = (EventFactHandle) ksession.insert(new SubClass());
+        ksession.fireAllRules();
+
+        clock.advanceTime(15, TimeUnit.SECONDS);
+        ksession.fireAllRules();
+        assertFalse(handle1.isExpired());
+        assertEquals( 1, ksession.getObjects().size() );
+
+        try {
+            ksession = SerializationHelper.getSerialisedStatefulKnowledgeSession( ksession, true, false );
+        } catch ( Exception e ) {
+            e.printStackTrace();
+            fail( e.getMessage() );
+        }
+
+        clock = ksession.getSessionClock();
+        clock.advanceTime(10, TimeUnit.SECONDS);
+        ksession.fireAllRules();
+        assertEquals( 0, ksession.getObjects().size() );
+    }
+
+    @Role(Role.Type.EVENT)
+    @Expires( "10s" )
+    public static class SuperClass implements Serializable { }
+
+    @Role(Role.Type.EVENT)
+    @Expires( "20s" )
+    public static class SubClass extends SuperClass { }
+
+    @Test
+    public void testTemporalOperatorWithGlobal() {
+        // DROOLS-993
+        String drl = "import " + SimpleEvent.class.getCanonicalName() + "\n" +
+                     "global java.util.List list;\n" +
+                     "global " + SimpleEvent.class.getCanonicalName() + " baseEvent;\n" +
+                     "\n" +
+                     "declare SimpleEvent\n" +
+                     "    @role( event )\n" +
+                     "    @timestamp( dateEvt )\n" +
+                     "end\n" +
+                     "\n" +
+                     "rule R \n" +
+                     "    when\n" +
+                     "        $e : SimpleEvent( dateEvt before[10s] baseEvent.dateEvt )\n" +
+                     "    then\n" +
+                     "        list.add(\"1\");\n" +
+                     "    end\n " +
+                     "";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+
+        List<String> list = new ArrayList<String>();
+        ksession.setGlobal("list", list);
+
+        ksession.setGlobal("baseEvent", new SimpleEvent("1", 15000L));
+
+        SimpleEvent event1 = new SimpleEvent("1", 0L);
+        ksession.insert(event1);
+        ksession.fireAllRules();
+
+        assertEquals( 1, list.size() );
+    }
+
+    @Test
+    public void testNoExpirationWithNot() {
+        // DROOLS-984
+        checkNoExpiration("$s: SimpleEvent ()\n" +
+                          "not SimpleEvent (this != $s, this after[0, 30s] $s)\n" );
+    }
+
+    @Test
+    public void testNoExpirationWithSlidingWindow() {
+        // DROOLS-984
+        checkNoExpiration("SimpleEvent( ) over window:time(30s)\n" );
+    }
+
+    @Test
+    public void testNoExpirationWithNoTemporalConstraint() {
+        // DROOLS-984
+        checkNoExpiration("SimpleEvent( )\n" );
+    }
+
+    private void checkNoExpiration(String lhs) {
+        String drl = "import " + SimpleEvent.class.getCanonicalName() + "\n" +
+                     "declare SimpleEvent\n" +
+                     "    @role( event )\n" +
+                     "    @expires( -1 )\n" +
+                     "    @timestamp( dateEvt )\n" +
+                     "end\n" +
+                     "\n" +
+                     "rule R when\n" +
+                     lhs +
+                     "then\n" +
+                     "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+        PseudoClockScheduler clock = ksession.getSessionClock();
+
+        SimpleEvent event1 = new SimpleEvent("1", 0L);
+        ksession.insert(event1);
+        ksession.fireAllRules();
+
+        //Session should only contain the fact we just inserted.
+        assertEquals( 1, ksession.getFactCount() );
+
+        clock.advanceTime( 60000, TimeUnit.MILLISECONDS );
+        ksession.fireAllRules();
+
+        //We've disabled expiration, so fact should still be in WorkingMemory.
+        assertEquals( 1, ksession.getFactCount() );
+
+        ksession.dispose();
+    }
+
+    @Test
+    public void testCancelActivationWithExpiredEvent() {
+        // RHBRMS-2463
+        String drl = "import " + MyEvent.class.getCanonicalName() + "\n" +
+                     "import " + AtomicInteger.class.getCanonicalName() + "\n" +
+                     "declare MyEvent\n" +
+                     "    @role( event )\n" +
+                     "    @timestamp( timestamp )\n" +
+                     "    @expires( 10ms )\n" +
+                     "end\n" +
+                     "\n" +
+                     "rule R\n" +
+                     "    timer (int: 0 1; start=$startTime, repeat-limit=0 )\n" +
+                     "    when\n" +
+                     "       $event: MyEvent ($startTime : timestamp)\n" +
+                     "       $counter : AtomicInteger(get() > 0)\n" +
+                     "    then\n" +
+                     "        System.out.println(\"RG_TEST_TIMER WITH \" + $event + \" AND \" + $counter);\n" +
+                     "        modify($counter){\n" +
+                     "            decrementAndGet()\n" +
+                     "        }\n" +
+                     "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+
+        long now = System.currentTimeMillis();
+        PseudoClockScheduler sessionClock = ksession.getSessionClock();
+        sessionClock.setStartupTime(now - 10000);
+
+        AtomicInteger counter = new AtomicInteger( 1 );
+        MyEvent event1 = new MyEvent(now - 8000);
+        MyEvent event2 = new MyEvent(now - 7000);
+        MyEvent event3 = new MyEvent(now - 6000);
+
+        ksession.insert(counter);
+        ksession.insert(event1);
+        ksession.insert(event2);
+        ksession.insert(event3);
+
+        ksession.fireAllRules(); // Nothing Happens
+        assertEquals(1, counter.get());
+
+        sessionClock.advanceTime(10000, TimeUnit.MILLISECONDS);
+        ksession.fireAllRules();
+
+        assertEquals(0, counter.get());
+    }
+
+    @Test
+    public void testRightTupleExpiration() {
+        // RHBRMS-2463
+        String drl = "import " + MyEvent.class.getCanonicalName() + "\n" +
+                     "import " + AtomicInteger.class.getCanonicalName() + "\n" +
+                     "global AtomicInteger counter;\n" +
+                     "declare MyEvent\n" +
+                     "    @role( event )\n" +
+                     "    @timestamp( timestamp )\n" +
+                     "    @expires( 10ms )\n" +
+                     "end\n" +
+                     "\n" +
+                     "rule R when\n" +
+                     "       String()\n" +
+                     "       MyEvent()\n" +
+                     "       Boolean()\n" +
+                     "       Integer()\n" +
+                     "    then\n" +
+                     "       counter.incrementAndGet();\n" +
+                     "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+
+        PseudoClockScheduler sessionClock = ksession.getSessionClock();
+        sessionClock.setStartupTime(0);
+
+        AtomicInteger counter = new AtomicInteger( 0 );
+        ksession.setGlobal( "counter", counter );
+
+        ksession.insert("test");
+        ksession.insert(true);
+        ksession.insert(new MyEvent(0));
+        ksession.insert(new MyEvent(15));
+
+        ksession.fireAllRules();
+        assertEquals(0, counter.get());
+
+        sessionClock.advanceTime(20, TimeUnit.MILLISECONDS);
+        ksession.insert( 1 );
+        ksession.fireAllRules(); // MyEvent is expired
+
+        assertEquals(1, counter.get());
+    }
+
+    @Test
+    public void testLeftTupleExpiration() {
+        // RHBRMS-2463
+        String drl = "import " + MyEvent.class.getCanonicalName() + "\n" +
+                     "import " + AtomicInteger.class.getCanonicalName() + "\n" +
+                     "global AtomicInteger counter;\n" +
+                     "declare MyEvent\n" +
+                     "    @role( event )\n" +
+                     "    @timestamp( timestamp )\n" +
+                     "    @expires( 10ms )\n" +
+                     "end\n" +
+                     "\n" +
+                     "rule R when\n" +
+                     "       MyEvent()\n" +
+                     "       Boolean()\n" +
+                     "       Integer()\n" +
+                     "    then\n" +
+                     "       counter.incrementAndGet();\n" +
+                     "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+
+        PseudoClockScheduler sessionClock = ksession.getSessionClock();
+        sessionClock.setStartupTime(0);
+
+        AtomicInteger counter = new AtomicInteger( 0 );
+        ksession.setGlobal( "counter", counter );
+
+        ksession.insert(true);
+        ksession.insert(new MyEvent(0));
+        ksession.insert(new MyEvent(15));
+
+        ksession.fireAllRules();
+        assertEquals(0, counter.get());
+
+        sessionClock.advanceTime(20, TimeUnit.MILLISECONDS);
+        ksession.insert( 1 );
+        ksession.fireAllRules(); // MyEvent is expired
+
+        assertEquals(1, counter.get());
+    }
+
+    @Test
+    public void testLeftTupleExpirationWithNot() {
+        // RHBRMS-2463
+        String drl = "import " + MyEvent.class.getCanonicalName() + "\n" +
+                     "import " + AtomicInteger.class.getCanonicalName() + "\n" +
+                     "global AtomicInteger counter;\n" +
+                     "declare MyEvent\n" +
+                     "    @role( event )\n" +
+                     "    @timestamp( timestamp )\n" +
+                     "    @expires( 10ms )\n" +
+                     "end\n" +
+                     "\n" +
+                     "rule R when\n" +
+                     "       MyEvent()\n" +
+                     "       Boolean()\n" +
+                     "       not Integer()\n" +
+                     "    then\n" +
+                     "       counter.incrementAndGet();\n" +
+                     "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+
+        PseudoClockScheduler sessionClock = ksession.getSessionClock();
+        sessionClock.setStartupTime(0);
+
+        AtomicInteger counter = new AtomicInteger( 0 );
+        ksession.setGlobal( "counter", counter );
+
+        ksession.insert(true);
+        FactHandle iFh = ksession.insert( 1 );
+        ksession.insert(new MyEvent(0));
+        ksession.insert(new MyEvent(15));
+
+        ksession.fireAllRules();
+        assertEquals(0, counter.get());
+
+        sessionClock.advanceTime(20, TimeUnit.MILLISECONDS);
+        ksession.delete( iFh );
+        ksession.fireAllRules(); // MyEvent is expired
+
+        assertEquals(1, counter.get());
+    }
+
+    @Test
+    public void testExpireLogicallyInsertedEvent() {
+        // RHBRMS-2515
+        String drl = "import " + MyEvent.class.getCanonicalName() + "\n" +
+                     "declare MyEvent\n" +
+                     "    @role( event )\n" +
+                     "    @timestamp( timestamp )\n" +
+                     "    @expires( 10ms )\n" +
+                     "end\n" +
+                     "\n" +
+                     "rule R when\n" +
+                     "  $e : MyEvent()\n" +
+                     "then\n" +
+                     "  insertLogical($e.toString());\n" +
+                     "end";
+
+        KieSessionConfiguration sessionConfig = KnowledgeBaseFactory.newKnowledgeSessionConfiguration();
+        sessionConfig.setOption( ClockTypeOption.get( ClockType.PSEUDO_CLOCK.getId() ) );
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSession ksession = kbase.newKieSession( sessionConfig, null );
+
+        PseudoClockScheduler sessionClock = ksession.getSessionClock();
+        sessionClock.setStartupTime(0);
+
+        ksession.insert(new MyEvent(0));
+        assertEquals( 1L, ksession.getFactCount() );
+
+        ksession.fireAllRules();
+        assertEquals( 2L, ksession.getFactCount() );
+
+        sessionClock.advanceTime(20, TimeUnit.MILLISECONDS);
+        ksession.fireAllRules();
+        assertEquals( 0L, ksession.getFactCount() );
+    }
+
+    @Test
+    public void testExpiredEventWithPendingActivations() throws Exception {
+        String drl = "package org.drools.drools_usage_pZB7GRxZp64;\n" +
+                     "\n" +
+                     "declare time_Var\n" +
+                     "    @role( event )\n" +
+                     "    @expires( 1s )\n" +
+                     "    value : Long\n" +
+                     "end\n" +
+                     "\n" +
+                     "declare ExpiringEvent_Var\n" +
+                     "    @role( event )\n" +
+                     "    @expires( 10s )\n" +
+                     "    value : Double\n" +
+                     "end\n" +
+                     "\n" +
+                     "declare window ExpiringEvent_Window1 ExpiringEvent_Var() over window:length(1) end\n" +
+                     "\n" +
+                     "rule \"Expring variable - Init\"\n" +
+                     "activation-group \"ExpiringEvent\"\n" +
+                     "    when\n" +
+                     "        $t : time_Var($now : Value != null) over window:length(1)\n" +
+                     "\n" +
+                     "        not ExpiringEvent_Var()\n" +
+                     "\n" +
+                     "    then\n" +
+                     "        System.out.println($now + \" : Init\");\n" +
+                     "        insert(new ExpiringEvent_Var(0.0));\n" +
+                     "end\n" +
+                     "\n" +
+                     "rule \"Expiring variable - Rule 1\"\n" +
+                     "activation-group \"ExpiringEvent\"\n" +
+                     "    when\n" +
+                     "        $t : time_Var($now : Value != null) over window:length(1)\n" +
+                     "\n" +
+                     "        ExpiringEvent_Var(this before $t, $previousValue : Value < 1.0) from window ExpiringEvent_Window1\n" +
+                     "\n" +
+                     "    then\n" +
+                     "        System.out.println($now + \" : Rule 1\");\n" +
+                     "        insert(new ExpiringEvent_Var(1.0));\n" +
+                     "\n" +
+                     "end\n" +
+                     "\n" +
+                     "rule \"Expiring variable - Rule 2\"\n" +
+                     "activation-group \"ExpiringEvent\"\n" +
+                     "    when\n" +
+                     "        $t : time_Var($now : Value != null) over window:length(1)\n" +
+                     "\n" +
+                     "        ExpiringEvent_Var(this before $t, $previousValue : Value) from window ExpiringEvent_Window1\n" +
+                     "\n" +
+                     "    then\n" +
+                     "        System.out.println($now + \" : Rule 2\");\n" +
+                     "        insert(new ExpiringEvent_Var($previousValue));\n" +
+                     "\n" +
+                     "end";
+
+        KieServices kieServices = KieServices.Factory.get();
+
+        KieBaseConfiguration kieBaseConf = KieServices.Factory.get().newKieBaseConfiguration();
+        kieBaseConf.setOption( EventProcessingOption.STREAM );
+
+        KieBase kieBase = new KieHelper().addContent(drl, ResourceType.DRL).build(kieBaseConf);
+
+        KieSessionConfiguration config = kieServices.newKieSessionConfiguration();
+        config.setOption( ClockTypeOption.get("pseudo") );
+        KieSession session = kieBase.newKieSession(config, null);
+        SessionPseudoClock clock = session.getSessionClock();
+
+        FactType time_VarType = kieBase.getFactType( "org.drools.drools_usage_pZB7GRxZp64", "time_Var" );
+
+        clock.advanceTime(1472057509000L, TimeUnit.MILLISECONDS);
+
+        Object time_Var = time_VarType.newInstance();
+        time_VarType.set( time_Var, "value",  1472057509000L );
+
+        session.insert(time_Var);
+        session.fireAllRules();
+
+        for (int i=0; i<10; i++) {
+            clock.advanceTime(1, TimeUnit.SECONDS);
+
+            Object time_VarP1 = time_VarType.newInstance();
+            time_VarType.set( time_VarP1, "value",  clock.getCurrentTime() );
+
+            session.insert(time_VarP1);
+            session.fireAllRules();
+        }
+
+        clock.advanceTime(1, TimeUnit.SECONDS);
+        session.fireAllRules();
+
+        clock.advanceTime(1, TimeUnit.HOURS);
+        Object time_VarP1 = time_VarType.newInstance();
+        time_VarType.set( time_VarP1, "value",  clock.getCurrentTime() );
+        session.insert(time_VarP1);
+        session.fireAllRules();
+
+        clock.advanceTime(1, TimeUnit.HOURS);
+        Object time_VarP2 = time_VarType.newInstance();
+        time_VarType.set( time_VarP2, "value",  clock.getCurrentTime() );
+        session.insert(time_VarP2);
+        session.fireAllRules();
+
+        clock.advanceTime(1, TimeUnit.HOURS);
+        session.fireAllRules();
+
+        // actually should be empty..
+        for ( Object o : session.getFactHandles() ) {
+            if (o instanceof EventFactHandle) {
+                EventFactHandle eventFactHandle = (EventFactHandle)o;
+                assertFalse(eventFactHandle.isExpired());
+            }
+        }
     }
 }

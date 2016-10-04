@@ -1,5 +1,5 @@
 /*
- * Copyright 2006 JBoss Inc
+ * Copyright 2006 Red Hat, Inc. and/or its affiliates.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import org.drools.core.rule.From;
 import org.drools.core.rule.MVELDialectRuntimeData;
 import org.drools.core.rule.Pattern;
 import org.drools.core.rule.RuleConditionElement;
+import org.drools.core.spi.DeclarationScopeResolver;
 import org.drools.core.spi.KnowledgeHelper;
 
 import java.util.Arrays;
@@ -69,23 +70,32 @@ public class MVELFromBuilder
         try {
             Map<String, Declaration> decls = context.getDeclarationResolver().getDeclarations(context.getRule());
 
-            String text = (String) expr.getText();
+            String text = expr.getText();
             AnalysisResult analysis = dialect.analyzeExpression( context,
                                                                  descr,
                                                                  text,
-                                                                 new BoundIdentifiers(context.getDeclarationResolver().getDeclarationClasses( decls ),
-                                                                                      context.getKnowledgeBuilder().getGlobals() ) );
+                                                                 new BoundIdentifiers( DeclarationScopeResolver.getDeclarationClasses( decls ),
+                                                                                       context.getKnowledgeBuilder().getGlobals() ) );
             if ( analysis == null ) {
                 // something bad happened
                 return null;
             }
+
+            Class<?> returnType = ( (MVELAnalysisResult) analysis ).getReturnType();
+            if ( prefixPattern != null && !prefixPattern.isCompatibleWithFromReturnType( returnType ) ) {
+                context.addError( new DescrBuildError( descr,
+                                                       context.getRuleDescr(),
+                                                       null,
+                                                       "Pattern of type: '" + prefixPattern.getObjectType() + "' on rule '" + context.getRuleDescr().getName() +
+                                                       "' is not compatible with type " + returnType.getCanonicalName() + " returned by source") );
+                return null;
+
+            }
             
             final BoundIdentifiers usedIdentifiers = analysis.getBoundIdentifiers();            
             final Declaration[] declarations =  new Declaration[usedIdentifiers.getDeclrClasses().size()];
-            String[] declrStr = new String[declarations.length];
             int j = 0;
             for (String str : usedIdentifiers.getDeclrClasses().keySet() ) {
-                declrStr[j] = str;
                 declarations[j++] = decls.get( str );
             }
             Arrays.sort( declarations, SortDeclarations.instance  );            
@@ -122,6 +132,7 @@ public class MVELFromBuilder
             context.setTypesafe( typeSafe );
         }
 
+        from.setResultPattern( prefixPattern );
         return from;
     }
 }

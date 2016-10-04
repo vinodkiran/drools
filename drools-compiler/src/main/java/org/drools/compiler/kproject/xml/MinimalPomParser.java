@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,9 +95,8 @@ public class MinimalPomParser extends DefaultHandler {
             currentArtifactId = null;
             currentVersion = null;
         } else if ( "dependency".equals( qname ) ) {
-            if ( !"provided".equals(currentScope) && !"test".equals(currentScope) &&
-                 currentGroupId != null && currentArtifactId != null && currentVersion != null ) {
-                model.addDependency(new ReleaseIdImpl(currentGroupId, currentArtifactId, currentVersion));
+            if ( currentGroupId != null && currentArtifactId != null && currentVersion != null ) {
+                model.addDependency(new ReleaseIdImpl(currentGroupId, currentArtifactId, currentVersion), currentScope != null ? currentScope : "");
             }
             currentGroupId = null;
             currentArtifactId = null;
@@ -133,12 +132,6 @@ public class MinimalPomParser extends DefaultHandler {
         depth--;
     }
     
-    /**
-     * @param chars
-     * @param start
-     * @param len
-     * @see org.xml.sax.ContentHandler
-     */
     public void characters(final char[] chars,
                            final int start,
                            final int len) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ public class ClasspathKieProject extends AbstractKieProject {
 
     private static final Logger             log               = LoggerFactory.getLogger( ClasspathKieProject.class );
 
-    public static final String OSGI_KIE_MODULE_CLASS_NAME     = "org.drools.osgi.compiler.OsgiKieModule";
+    public static final String OSGI_KIE_MODULE_CLASS_NAME     = "org.kie.osgi.compiler.OsgiKieModule";
 
     private Map<ReleaseId, InternalKieModule>     kieModules  = new HashMap<ReleaseId, InternalKieModule>();
 
@@ -147,7 +147,7 @@ public class ClasspathKieProject extends AbstractKieProject {
             Class<?> c = Class.forName(OSGI_KIE_MODULE_CLASS_NAME);
             m = c.getMethod("create", URL.class);
         } catch (Exception e) {
-            log.error("It is necessary to have the drools-osgi-integration module on the path in order to create a KieProject from an ogsi bundle", e);
+            log.error("It is necessary to have the kie-osgi-integration module on the path in order to create a KieProject from an OSGi bundle", e);
             throw new RuntimeException(e);
         }
         try {
@@ -158,11 +158,11 @@ public class ClasspathKieProject extends AbstractKieProject {
         }
     }
 
-    private static void fetchKModuleFromSpring(URL kModuleUrl, String fixedURL){
+    private static void fetchKModuleFromSpring(URL kModuleUrl) {
         try{
             Class clazz = Class.forName("org.kie.spring.KModuleSpringMarshaller");
-            Method method = clazz.getDeclaredMethod("fromXML", java.net.URL.class, String.class);
-            method.invoke(null, kModuleUrl, fixedURL);
+            Method method = clazz.getDeclaredMethod("fromXML", java.net.URL.class);
+            method.invoke(null, kModuleUrl);
         } catch (Exception e) {
             log.error("It is necessary to have the kie-spring module on the path in order to create a KieProject from a spring context", e);
             throw new RuntimeException(e);
@@ -173,7 +173,7 @@ public class ClasspathKieProject extends AbstractKieProject {
         if ( url.getPath().endsWith("-spring.xml")) {
             // the entire kmodule creation is happening in the kie-spring module,
             // hence we force a null return
-            fetchKModuleFromSpring(url, fixedURL);
+            fetchKModuleFromSpring(url);
             return null;
         }
         KieModuleModel kieProject = KieModuleModelImpl.fromXML( url );
@@ -194,10 +194,10 @@ public class ClasspathKieProject extends AbstractKieProject {
             rootPath = IoUtils.asSystemSpecificPath( rootPath, rootPath.lastIndexOf( ':') );
         }
 
-        return createInternalKieModule(url, fixedURL, kieProject, releaseId, rootPath);
+        return createInternalKieModule(kieProject, releaseId, rootPath);
     }
 
-    public static InternalKieModule createInternalKieModule(URL url, String fixedURL, KieModuleModel kieProject, ReleaseId releaseId, String rootPath) {
+    public static InternalKieModule createInternalKieModule(KieModuleModel kieProject, ReleaseId releaseId, String rootPath) {
         File file = new File( rootPath );
         return file.isDirectory() ?
                new FileKieModule( releaseId, kieProject, file ) :
@@ -205,13 +205,13 @@ public class ClasspathKieProject extends AbstractKieProject {
     }
 
     public static String getPomProperties(String urlPathToAdd) {
-        String pomProperties = null;
+        String pomProperties;
         String rootPath = urlPathToAdd;
         if ( rootPath.lastIndexOf( ':' ) > 0 ) {
             rootPath = IoUtils.asSystemSpecificPath( rootPath, rootPath.lastIndexOf( ':' ) );
         }
 
-        if ( urlPathToAdd.endsWith( ".apk" ) || urlPathToAdd.endsWith( ".jar" ) || urlPathToAdd.endsWith( "/content" ) ) {
+        if ( urlPathToAdd.endsWith( ".apk" ) || isJarFile( urlPathToAdd, rootPath ) || urlPathToAdd.endsWith( "/content" ) ) {
             pomProperties = getPomPropertiesFromZipFile(rootPath);
         } else {
             pomProperties = getPomPropertiesFromFileSystem(rootPath);
@@ -231,6 +231,17 @@ public class ClasspathKieProject extends AbstractKieProject {
             log.warn( "Unable to load pom.properties from" + urlPathToAdd );
         }
         return pomProperties;
+    }
+
+    private static boolean isJarFile(String urlPathToAdd, String rootPath) {
+        boolean result = false;
+        if (urlPathToAdd.endsWith( ".jar" )) {
+            File actualZipFile = new File( rootPath );
+            if (actualZipFile.exists() && actualZipFile.isFile()) {
+                result = true;
+            }
+        }
+        return result;
     }
 
     private static String getPomPropertiesFromZipFile(String rootPath) {
@@ -260,7 +271,9 @@ public class ClasspathKieProject extends AbstractKieProject {
             log.error( "Unable to load pom.properties from " + rootPath + "\n" + e.getMessage() );
         } finally {
             try {
-                zipFile.close();
+                if (zipFile != null) {
+                    zipFile.close();
+                }
             } catch ( IOException e ) {
                 log.error( "Error when closing InputStream to " + rootPath + "\n" + e.getMessage() );
             }
@@ -330,7 +343,7 @@ public class ClasspathKieProject extends AbstractKieProject {
                 }
             }
         } else {
-            log.warn( "As folder project tried to fall back to pom.xml, but could not find one for " + file );
+            log.warn( "As folder project tried to fall back to pom.xml, but could not find one" );
         }
         return null;
     }
@@ -359,7 +372,7 @@ public class ClasspathKieProject extends AbstractKieProject {
         } else {
             if (url.toString().contains("-spring.xml")){
                 urlPath = urlPath.substring( 0, urlPath.length() - ("/" + KieModuleModelImpl.KMODULE_SPRING_JAR_PATH).length() );
-            } else {
+            } else if (url.toString().endsWith(KieModuleModelImpl.KMODULE_JAR_PATH)) {
                 urlPath = urlPath.substring( 0,
                         urlPath.length() - ("/" + KieModuleModelImpl.KMODULE_JAR_PATH).length() );
             }
@@ -390,16 +403,45 @@ public class ClasspathKieProject extends AbstractKieProject {
     }
 
     private static String getPathForVFS(URL url) {
+        Method m = null;
+        try {
+            m = Class.forName("org.jboss.vfs.VirtualFile").getMethod("getPhysicalFile");
+        } catch (Exception e) {
+            try {
+                // Try to retrieve the VirtualFile class also on TCCL
+                m = Class.forName("org.jboss.vfs.VirtualFile", true, Thread.currentThread().getContextClassLoader()).getMethod("getPhysicalFile");
+            } catch (Exception e1) {
+                // VirtualFile is not available on the classpath - ignore
+                log.warn( "Found virtual file " + url + " but org.jboss.vfs.VirtualFile is not available on the classpath" );
+            }
+        }
+
+        if (m == null) {
+            return url.getPath();
+        }
+
+        String path = null;
+        try {
+            Object content = url.openConnection().getContent();
+            File f = (File)m.invoke(content);
+            path = f.getPath();
+        } catch (Exception e) {
+            log.error( "Error when reading virtual file from " + url.toString(), e );
+        }
+
+        if (path == null) {
+            return url.getPath();
+        }
+
         String urlString = url.toString();
+        if (!urlString.contains( "/" + KieModuleModelImpl.KMODULE_JAR_PATH )) {
+            return path;
+        }
+
         int kModulePos = urlString.length() - ("/" + KieModuleModelImpl.KMODULE_JAR_PATH).length();
         boolean isInJar = urlString.substring(kModulePos - 4, kModulePos).equals(".jar");
 
         try {
-            Method m = Class.forName("org.jboss.vfs.VirtualFile").getMethod("getPhysicalFile");
-            Object content = url.openConnection().getContent();
-            File f = (File)m.invoke(content);
-            String path = f.getPath();
-
             if (isInJar && path.contains("contents" + File.separator)) {
                 String jarName = urlString.substring(0, kModulePos);
                 jarName = jarName.substring(jarName.lastIndexOf('/')+1);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,9 @@ public class CompositePackageDescr extends PackageDescr {
 
     public void addPackageDescr(Resource resource, PackageDescr packageDescr) {
         if (!getNamespace().equals(packageDescr.getNamespace())) {
-            throw new RuntimeException("Composing PackageDescr in different namespaces");
+            throw new RuntimeException("Composing PackageDescr (" + packageDescr.getName()
+                + ") in different namespaces (namespace=" + getNamespace()
+                + " packageDescr=" + packageDescr.getNamespace() + ")" );
         }
         internalAdd(resource, packageDescr);
     }

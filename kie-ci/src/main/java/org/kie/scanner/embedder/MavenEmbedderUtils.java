@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,10 +49,10 @@ public class MavenEmbedderUtils {
 
     public static ComponentProvider buildComponentProvider(ClassLoader mavenClassLoader, ClassLoader parent, MavenRequest mavenRequest) throws MavenEmbedderException {
         if (enforceWiredComponentProvider || MavenEmbedderUtils.class.getClassLoader().getClass().toString().contains( "Bundle" )) {
-            log.info( "In OSGi: using programmatically wired maven parser" );
+            log.debug( "In OSGi: using programmatically wired maven parser" );
             return new WiredComponentProvider();
         }
-        log.info( "Not in OSGi: using plexus based maven parser" );
+        log.debug( "Not in OSGi: using plexus based maven parser" );
         return new PlexusComponentProvider( mavenClassLoader, parent, mavenRequest );
     }
 

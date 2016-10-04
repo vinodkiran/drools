@@ -510,7 +510,7 @@ unaryExpressionNotPlusMinus returns [BaseDescr result]
                 { hasBindings = true; helper.emit($var, DroolsEditorType.IDENTIFIER_VARIABLE); helper.emit($UNIFY, DroolsEditorType.SYMBOL); if( buildDescr ) { bind = new BindingDescr($var.text, null, true); helper.setStart( bind, $var ); } } ))
         )?
 
-        ( (DIV ID)=>left2=xpathPrimary { if( buildDescr ) { $result = $left2.result; } }
+        ( (xpathSeparator ID)=>left2=xpathPrimary { if( buildDescr ) { $result = $left2.result; } }
           | left1=primary { if( buildDescr ) { $result = $left1.result; } }
         )
 
@@ -556,12 +556,17 @@ primitiveType
     |	double_key
     ;
 
+xpathSeparator
+    :   DIV
+    |	QUESTION_DIV
+    ;
+
 xpathPrimary returns [BaseDescr result]
     : xpathChunk+
     ;
 
 xpathChunk returns [BaseDescr result]
-    : (DIV ID)=> DIV ID (DOT ID)* (LEFT_SQUARE DECIMAL RIGHT_SQUARE)? (LEFT_CURLY xpathExpressionList RIGHT_CURLY)?
+    : (xpathSeparator ID)=> xpathSeparator ID (DOT ID)* (LEFT_SQUARE DECIMAL RIGHT_SQUARE)? (LEFT_CURLY xpathExpressionList RIGHT_CURLY)?
     ;
 
 xpathExpressionList returns [java.util.List<String> exprs]
@@ -571,7 +576,7 @@ xpathExpressionList returns [java.util.List<String> exprs]
   ;
 
 primary returns [BaseDescr result]
-    :	(parExpression)=> expr=parExpression {  if( buildDescr  ) { $result = $expr.result; }  }
+    :	(LEFT_PAREN)=> expr=parExpression {  if( buildDescr  ) { $result = $expr.result; }  }
     |   (nonWildcardTypeArguments)=> nonWildcardTypeArguments (explicitGenericInvocationSuffix | this_key arguments)
     |   (literal)=> literal { if( buildDescr  ) { $result = new AtomicExprDescr( $literal.text, true ); }  }
     //|   this_key ({!helper.validateSpecialID(2)}?=> DOT ID)* ({helper.validateIdentifierSufix()}?=> identifierSuffix)?
@@ -585,7 +590,7 @@ primary returns [BaseDescr result]
         (
             ( (DOT ID)=>d=DOT i2=ID { helper.emit($d, DroolsEditorType.SYMBOL); helper.emit($i2, DroolsEditorType.IDENTIFIER); } )
             |
-            ( (DOT LEFT_PAREN)=>d=DOT LEFT_PAREN { helper.emit($d, DroolsEditorType.SYMBOL); helper.emit($LEFT_PAREN, DroolsEditorType.SYMBOL); }
+            ( ((DOT|NULL_SAFE_DOT) LEFT_PAREN)=>d=(DOT|NULL_SAFE_DOT) LEFT_PAREN { helper.emit($d, DroolsEditorType.SYMBOL); helper.emit($LEFT_PAREN, DroolsEditorType.SYMBOL); }
                                     expression (COMMA { helper.emit($COMMA, DroolsEditorType.SYMBOL); } expression)*
                                     RIGHT_PAREN { helper.emit($RIGHT_PAREN, DroolsEditorType.SYMBOL); }
             )

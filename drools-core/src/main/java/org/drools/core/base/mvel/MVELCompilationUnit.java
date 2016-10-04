@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import org.drools.core.rule.Declaration;
 import org.drools.core.rule.MVELDialectRuntimeData;
 import org.drools.core.spi.GlobalResolver;
 import org.drools.core.spi.KnowledgeHelper;
+import org.drools.core.spi.Tuple;
 import org.kie.api.definition.rule.Rule;
 import org.mvel2.DataConversion;
 import org.mvel2.MVEL;
@@ -45,13 +46,13 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -162,6 +163,29 @@ public class MVELCompilationUnit
 
     public String getExpression() {
         return expression;
+    }
+
+    @Override
+    public boolean equals( Object obj ) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || !(obj instanceof MVELCompilationUnit)) {
+            return false;
+        }
+
+        MVELCompilationUnit other = (MVELCompilationUnit) obj;
+
+        return expression.equals( other.expression ) &&
+               Arrays.equals(previousDeclarations, other.previousDeclarations) &&
+               Arrays.equals(localDeclarations, other.localDeclarations);
+    }
+
+    @Override
+    public int hashCode() {
+        return 23 * expression.hashCode() +
+               29 * Arrays.hashCode( previousDeclarations ) +
+               31 * Arrays.hashCode( localDeclarations );
     }
 
     public void writeExternal( ObjectOutput out ) throws IOException {
@@ -276,7 +300,7 @@ public class MVELCompilationUnit
     public VariableResolverFactory getFactory(final Object knowledgeHelper,
                                               final Declaration[] prevDecl,
                                               final Rule rule,
-                                              final LeftTuple tuples,
+                                              final Tuple tuples,
                                               final Object[] otherVars,
                                               final InternalWorkingMemory workingMemory,
                                               final GlobalResolver globals) {
@@ -289,24 +313,24 @@ public class MVELCompilationUnit
                                               final Declaration[] prevDecl,
                                               final Rule rule,
                                               final InternalFactHandle rightHandle,
-                                              final LeftTuple tuples,
+                                              final Tuple tuple,
                                               final Object[] otherVars,
                                               final InternalWorkingMemory workingMemory,
                                               final GlobalResolver globals) {
         VariableResolverFactory factory = createFactory();
-        updateFactory(knowledgeHelper, prevDecl, rule, rightHandle, rightHandle != null ? rightHandle.getObject() : null, tuples, otherVars, workingMemory, globals, factory);
+        updateFactory(knowledgeHelper, prevDecl, rule, rightHandle, rightHandle != null ? rightHandle.getObject() : null, tuple, otherVars, workingMemory, globals, factory);
         return factory;
     }
     
     public void updateFactory(Object knowledgeHelper,
                               Rule rule,
                               InternalFactHandle rightHandle,
-                              LeftTuple leftTuple,
+                              Tuple tuple,
                               Object[] localVars,
                               InternalWorkingMemory workingMemory,
                               GlobalResolver globalResolver,
                               VariableResolverFactory factory) {
-        updateFactory(knowledgeHelper, null, rule, rightHandle, rightHandle != null ? rightHandle.getObject() : null, leftTuple, localVars, workingMemory, globalResolver, factory);
+        updateFactory(knowledgeHelper, null, rule, rightHandle, rightHandle != null ? rightHandle.getObject() : null, tuple, localVars, workingMemory, globalResolver, factory);
     }    
     
     public void updateFactory(Object knowledgeHelper,
@@ -314,7 +338,7 @@ public class MVELCompilationUnit
                               Rule rule,
                               InternalFactHandle rightHandle,
                               Object rightObject,
-                              LeftTuple tuples,
+                              Tuple tuple,
                               Object[] otherVars,
                               InternalWorkingMemory workingMemory,
                               GlobalResolver globals,
@@ -337,8 +361,8 @@ public class MVELCompilationUnit
             }
         }
 
-        InternalFactHandle[] handles = tuples != null ? tuples.toFactHandles() : new InternalFactHandle[0];
-        if ( operators != null ) {
+        InternalFactHandle[] handles = tuple instanceof LeftTuple ? ( (LeftTuple) tuple ).toFactHandles() : null;
+        if ( operators.length > 0 ) {
             for (EvaluatorWrapper operator : operators) {
                 // TODO: need to have one operator per working memory
                 factory.getIndexedVariableResolver(i++).setValue(operator);
@@ -346,12 +370,12 @@ public class MVELCompilationUnit
             }
         }
 
-        IdentityHashMap<Object, InternalFactHandle> identityMap = null;
-        if ( knowledgeHelper != null ) {
-            identityMap = new IdentityHashMap<Object, InternalFactHandle>();
-        }
+        Object[] objs = null;
 
-        if ( tuples != null ) {
+        if ( tuple != null ) {
+            if (handles == null) {
+                objs = tuple.toObjects();
+            }
             if ( this.previousDeclarations != null && this.previousDeclarations.length > 0 ) {
                 // Consequences with 'or's will have different declaration offsets, so use the one's from the RTN's subrule.
                 if ( prevDecl == null ) {
@@ -361,12 +385,8 @@ public class MVELCompilationUnit
                 }
 
                 for (Declaration decl : prevDecl) {
-                    InternalFactHandle handle = getFactHandle(decl, handles);
-
-                    Object o = decl.getValue(workingMemory, handle.getObject());
-                    if (knowledgeHelper != null && decl.isPatternDeclaration()) {
-                        identityMap.put(o, handle);
-                    }
+                    int offset = decl.getPattern().getOffset();
+                    Object o = decl.getValue(workingMemory, objs != null ? objs[offset] : handles[offset].getObject());
                     factory.getIndexedVariableResolver(i++).setValue(o);
                 }
             }
@@ -375,12 +395,10 @@ public class MVELCompilationUnit
         if ( this.localDeclarations != null && this.localDeclarations.length > 0 ) {
             for ( Declaration decl : this.localDeclarations ) {
                 Object value;
-                if( readLocalsFromTuple && tuples != null ) {
-                    InternalFactHandle handle = getFactHandle( decl,
-                                                               handles );
-
+                if( readLocalsFromTuple && tuple != null ) {
+                    int offset = decl.getPattern().getOffset();
                     value = decl.getValue( workingMemory,
-                                           handle.getObject() );
+                                           objs != null ? objs[offset] : handles[offset].getObject() );
                 } else {
                     value = decl.getValue( workingMemory,
                                           rightObject ); 
@@ -416,7 +434,7 @@ public class MVELCompilationUnit
 
     public static InternalFactHandle getFactHandle( Declaration declaration,
                                                     InternalFactHandle[] handles ) {
-        return handles.length > declaration.getPattern().getOffset() ? handles[declaration.getPattern().getOffset()] : null;
+        return handles != null && handles.length > declaration.getPattern().getOffset() ? handles[declaration.getPattern().getOffset()] : null;
     }
 
     private static Serializable compile( final String text,

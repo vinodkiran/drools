@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ public abstract class AbstractKieProject implements KieProject {
     }
 
     public KieBaseModel getKieBaseModel(String kBaseName) {
-        return kBaseModels.get( kBaseName );
+        return kBaseName == null ? getDefaultKieBaseModel() : kBaseModels.get( kBaseName );
     }
 
     public Collection<String> getKieBaseNames() {
@@ -92,7 +92,7 @@ public abstract class AbstractKieProject implements KieProject {
     }
 
     public KieSessionModel getKieSessionModel(String kSessionName) {
-        return kSessionModels.get( kSessionName );
+        return kSessionName == null ? getDefaultKieSession() : kSessionModels.get( kSessionName );
     }
 
     protected void indexParts(Collection<InternalKieModule> kieModules,

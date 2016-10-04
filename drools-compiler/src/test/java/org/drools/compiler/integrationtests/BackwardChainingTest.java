@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import org.drools.core.reteoo.QueryElementNode;
 import org.drools.core.reteoo.RightInputAdapterNode;
 import org.junit.Test;
 import org.kie.api.io.ResourceType;
+import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.rule.FactHandle;
 import org.kie.api.runtime.rule.LiveQuery;
 import org.kie.api.runtime.rule.QueryResults;
@@ -52,6 +53,7 @@ import org.kie.internal.builder.conf.RuleEngineOption;
 import org.kie.internal.definition.KnowledgePackage;
 import org.kie.internal.io.ResourceFactory;
 import org.kie.internal.runtime.StatefulKnowledgeSession;
+import org.kie.internal.utils.KieHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1571,19 +1573,19 @@ public class BackwardChainingTest extends CommonTestMethodBase {
             }
         }
 
-        BetaNode stringBetaNode = (BetaNode) node.getSinkPropagator().getSinks()[0];
+        BetaNode stringBetaNode = (BetaNode) node.getObjectSinkPropagator().getSinks()[0];
         QueryElementNode queryElementNode1 = (QueryElementNode) stringBetaNode.getSinkPropagator().getSinks()[0];
         RightInputAdapterNode riaNode1 = (RightInputAdapterNode) queryElementNode1.getSinkPropagator().getSinks()[0];
-        AccumulateNode accNode = (AccumulateNode) riaNode1.getSinkPropagator().getSinks()[0];
+        AccumulateNode accNode = (AccumulateNode) riaNode1.getObjectSinkPropagator().getSinks()[0];
 
         QueryElementNode queryElementNode2 = (QueryElementNode) accNode.getSinkPropagator().getSinks()[0];
         RightInputAdapterNode riaNode2 = (RightInputAdapterNode) queryElementNode2.getSinkPropagator().getSinks()[0];
-        ExistsNode existsNode = (ExistsNode) riaNode2.getSinkPropagator().getSinks()[0];
+        ExistsNode existsNode = (ExistsNode) riaNode2.getObjectSinkPropagator().getSinks()[0];
 
         QueryElementNode queryElementNode3 = (QueryElementNode) existsNode.getSinkPropagator().getSinks()[0];
         FromNode fromNode = (FromNode) queryElementNode3.getSinkPropagator().getSinks()[0];
         RightInputAdapterNode riaNode3 = (RightInputAdapterNode) fromNode.getSinkPropagator().getSinks()[0];
-        NotNode notNode = (NotNode) riaNode3.getSinkPropagator().getSinks()[0];
+        NotNode notNode = (NotNode) riaNode3.getObjectSinkPropagator().getSinks()[0];
 
         StatefulKnowledgeSession ksession = createKnowledgeSession( kbase );
         InternalWorkingMemory wm = ((StatefulKnowledgeSessionImpl) ksession);
@@ -1734,7 +1736,8 @@ public class BackwardChainingTest extends CommonTestMethodBase {
                       notMemory.getRightTupleMemory().size() );
     }
 
-    @Test(timeout = 10000)
+    //@Test(timeout = 10000)
+    @Test()
     public void testDynamicRulesWithSharing() throws IOException,
                                              ClassNotFoundException {
         String str = "" +
@@ -2131,7 +2134,7 @@ public class BackwardChainingTest extends CommonTestMethodBase {
         KnowledgeBase kbase = SerializationHelper.serializeObject( loadKnowledgeBaseFromString( drl ) );
     }
 
-    @Test (timeout = 10000)
+    @Test(timeout = 10000)
     public void testInsertionOrderTwo() throws Exception {
         String str = "" +
                 "package org.drools.compiler.test \n" +
@@ -3258,5 +3261,53 @@ public class BackwardChainingTest extends CommonTestMethodBase {
 
     }
 
+    @Test
+    public void testNpeOnQuery() {
+        String drl =
+                "global java.util.List list; " +
+                "query foo( Integer $i ) " +
+                "   $i := Integer( this < 10 ) " +
+                "end\n" +
+                "\n" +
 
+                "rule r1 when " +
+                "   foo( $i ; ) " +
+                "   Integer( this == 10 ) " +
+                "then " +
+                "   System.out.println(\"10 \" + $i);" +
+                "   list.add( 10 );\n" +
+                "end\n" +
+                "\n" +
+
+                "rule r2 when " +
+                "   foo( $i; ) " +
+                "   Integer( this == 20 ) " +
+                "then " +
+                "   System.out.println(\"20 \" + $i);" +
+                "   list.add( 20 );\n" +
+                "end\n" +
+
+                "rule r3 when " +
+                "   $i : Integer( this == 1 ) " +
+                "then " +
+                "   System.out.println($i);" +
+                "   update( kcontext.getKieRuntime().getFactHandle( $i ), $i + 1 );" +
+                "end\n" +
+                "\n";
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieSession kieSession = helper.build().newKieSession();
+
+        List<Integer> list = new ArrayList<Integer>();
+        kieSession.setGlobal( "list", list );
+
+        kieSession.insert( 1 );
+        kieSession.insert( 20 );
+
+        kieSession.fireAllRules();
+
+        assertEquals( 1, list.size() );
+        assertEquals( 20, (int)list.get(0) );
+    }
 }

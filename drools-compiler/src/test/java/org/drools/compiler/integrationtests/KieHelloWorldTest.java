@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ public class KieHelloWorldTest extends CommonTestMethodBase {
         String drl = "package org.drools.compiler.integrationtests\n" +
                 "import " + Message.class.getCanonicalName() + "\n" +
                 "rule R1 when\n" +
-                "   $m : Message( mesage == \"Hello World\" )\n" +
+                "   $m : Message( nonExistentField == \"Hello World\" )\n" +
                 "then\n" +
                 "end\n";
 
@@ -214,8 +214,8 @@ public class KieHelloWorldTest extends CommonTestMethodBase {
 
         KieFileSystem kfs = ks.newKieFileSystem()
                 .generateAndWritePomXML( releaseId )
-                .write( "src/main/resources/KBase1/org/pkg1/test/r1.drl", createDrlWithGlobal( "R1" ) )
-                .write( "src/main/resources/KBase1/org/pkg2/test/r2.drl", createDrlWithGlobal( "R2" ) )
+                .write( "src/main/resources/org/pkg1/test/r1.drl", createDrlWithGlobal( "R1" ) )
+                .write( "src/main/resources/org/pkg2/test/r2.drl", createDrlWithGlobal( "R2" ) )
                 .writeKModuleXML( createKieProjectWithPackages( ks, "org.pkg1.*" ).toXML() );
         ks.newKieBuilder( kfs ).buildAll();
 
@@ -237,13 +237,13 @@ public class KieHelloWorldTest extends CommonTestMethodBase {
 
         KieFileSystem kfs = ks.newKieFileSystem()
                 .generateAndWritePomXML(releaseId)
-                .write("src/main/resources/KBase1/rules/rules.drl", createDrlWithGlobal("R1"))
-                .write("src/main/resources/KBase1/rules/tests/tests.drl", createDrlWithGlobal("R2"))
-                .write("src/main/resources/KBase1/aaarules/aaarules.drl", createDrlWithGlobal("R3"))
-                .write("src/main/resources/KBase1/sample/brms601_1310778/rules/rules.drl", createDrlWithGlobal("R4"))
-                .write("src/main/resources/KBase1/sample/brms601_1310778/tests/tests.drl", createDrlWithGlobal("R5"))
-                .write("src/main/resources/KBase1/tests/tests.drl", createDrlWithGlobal("R6"))
-                .write("src/main/resources/KBase1/rules2/rules2.drl", createDrlWithGlobal("R7"))
+                .write("src/main/resources/rules/rules.drl", createDrlWithGlobal("R1"))
+                .write("src/main/resources/rules/tests/tests.drl", createDrlWithGlobal("R2"))
+                .write("src/main/resources/aaarules/aaarules.drl", createDrlWithGlobal("R3"))
+                .write("src/main/resources/sample/brms601_1310778/rules/rules.drl", createDrlWithGlobal("R4"))
+                .write("src/main/resources/sample/brms601_1310778/tests/tests.drl", createDrlWithGlobal("R5"))
+                .write("src/main/resources/tests/tests.drl", createDrlWithGlobal("R6"))
+                .write("src/main/resources/rules2/rules2.drl", createDrlWithGlobal("R7"))
                 .writeKModuleXML( createKieProjectWithPackages(ks, "rules.*").toXML());
         ks.newKieBuilder( kfs ).buildAll();
 
@@ -280,14 +280,15 @@ public class KieHelloWorldTest extends CommonTestMethodBase {
     private KieModuleModel createKieProjectWithPackages(KieServices ks, String pkg) {
         KieModuleModel kproj = ks.newKieModuleModel();
 
-        KieBaseModel kieBaseModel1 = kproj.newKieBaseModel("KBase1")
-                .setEqualsBehavior( EqualityBehaviorOption.EQUALITY )
-                .setEventProcessingMode( EventProcessingOption.STREAM )
-                .addPackage(pkg);
+        KieBaseModel kieBaseModel1 = kproj.newKieBaseModel()
+                                          .setEqualsBehavior( EqualityBehaviorOption.EQUALITY )
+                                          .setEventProcessingMode( EventProcessingOption.STREAM )
+                                          .addPackage(pkg);
 
         KieSessionModel ksession1 = kieBaseModel1.newKieSessionModel("KSession1")
-                .setType( KieSessionType.STATEFUL )
-                .setClockType(ClockTypeOption.get("realtime"));
+                                                 .setType( KieSessionType.STATEFUL )
+                                                 .setClockType(ClockTypeOption.get("realtime"))
+                                                 .setDefault( true );
 
         return kproj;
     }
@@ -329,6 +330,20 @@ public class KieHelloWorldTest extends CommonTestMethodBase {
         ksession = ks.newKieContainer(releaseId2).newKieSession("KSession1");
         ksession.insert(new Message("Hi Universe"));
         assertEquals( 0, ksession.fireAllRules() );
+    }
+
+    @Test
+    public void testGetDefaultKieSessionWithNullName() throws Exception {
+        // DROOLS-1276
+        KieServices ks = KieServices.Factory.get();
+
+        buildVersion(ks, "Hello World", "1.0");
+
+        ReleaseId releaseId1 = ks.newReleaseId("org.kie", "hello-world", "1.0");
+
+        KieSession ksession = ks.newKieContainer(releaseId1).newKieSession((String)null);
+        ksession.insert(new Message("Hello World"));
+        assertEquals( 1, ksession.fireAllRules() );
     }
 
     private void buildVersion(KieServices ks, String message, String version) {
@@ -411,13 +426,13 @@ public class KieHelloWorldTest extends CommonTestMethodBase {
     private KieModuleModel createKieProjectWithPackagesAnd2KieBases(KieServices ks) {
         KieModuleModel kproj = ks.newKieModuleModel();
 
-        kproj.newKieBaseModel("KBase2")
+        kproj.newKieBaseModel()
                 .setEqualsBehavior( EqualityBehaviorOption.EQUALITY )
                 .setEventProcessingMode( EventProcessingOption.STREAM )
                 .addPackage("org.pkg1")
                 .newKieSessionModel("KSession1");
 
-        kproj.newKieBaseModel("KBase1")
+        kproj.newKieBaseModel()
                 .setEqualsBehavior( EqualityBehaviorOption.EQUALITY )
                 .setEventProcessingMode( EventProcessingOption.STREAM )
                 .addPackage("org.pkg2")

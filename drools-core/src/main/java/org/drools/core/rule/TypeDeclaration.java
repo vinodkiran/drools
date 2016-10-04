@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.drools.core.rule;
 
 import org.drools.core.base.ClassObjectType;
 import org.drools.core.factmodel.ClassDefinition;
+import org.drools.core.factmodel.GeneratedFact;
 import org.drools.core.facttemplates.FactTemplate;
 import org.drools.core.facttemplates.FactTemplateObjectType;
 import org.drools.core.spi.InternalReadAccessor;
@@ -31,8 +32,6 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -114,7 +113,6 @@ public class TypeDeclaration
     private long                   expirationOffset = -1;
 
     private int                    order;
-    private List<TypeDeclaration>  redeclarations;
 
     public TypeDeclaration() {
 
@@ -124,8 +122,6 @@ public class TypeDeclaration
         nature = Nature.DECLARATION;
 
         this.valid =  true;
-
-        addRedeclaration( this );
     }
 
     public TypeDeclaration( Class< ? > typeClass ) {
@@ -148,8 +144,6 @@ public class TypeDeclaration
         this.typeTemplate = null;
         this.typesafe =  true;
         this.valid =  true;
-
-        addRedeclaration( this );
     }
 
     public void readExternal( ObjectInput in ) throws IOException,
@@ -316,6 +310,14 @@ public class TypeDeclaration
         }
     }
 
+    public boolean isDefinition() {
+        return nature == TypeDeclaration.Nature.DEFINITION || isGeneratedFact();
+    }
+
+    public boolean isGeneratedFact() {
+        return typeClass != null && GeneratedFact.class.isAssignableFrom( typeClass );
+    }
+
     /**
      * @return the typeTemplate
      */
@@ -472,27 +474,6 @@ public class TypeDeclaration
             settableProprties = ClassUtils.getSettableProperties( getTypeClass() );
         }
         return settableProprties;
-    }
-
-    public void addRedeclaration( TypeDeclaration typeDeclaration ) {
-        if ( redeclarations == null ) {
-            redeclarations = new ArrayList<TypeDeclaration>();
-        }
-        redeclarations.add( typeDeclaration );
-    }
-
-    private List<TypeDeclaration> getRedeclarations( ) {
-        return Collections.unmodifiableList( redeclarations );
-    }
-
-
-    public boolean removeRedeclaration( TypeDeclaration decl ) {
-        if ( ! redeclarations.contains( decl ) ) {
-            return false;
-        } else {
-            redeclarations.remove( decl );
-            return true;
-        }
     }
 
     public String toString() {

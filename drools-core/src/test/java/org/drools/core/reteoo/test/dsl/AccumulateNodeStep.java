@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,6 @@ import org.drools.core.spi.BetaNodeFieldConstraint;
 import org.drools.core.spi.KnowledgeHelper;
 import org.kie.api.runtime.rule.AccumulateFunction;
 
-import java.beans.IntrospectionException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -131,26 +130,17 @@ public class AccumulateNodeStep
 
                 if ( "source".equals( type ) ) {
                     Declaration declr = (Declaration) context.get( val );
-                    try {
                         BetaNodeFieldConstraint sourceBetaConstraint = this.reteTesterHelper.getBoundVariableConstraint( cls,
                                                                                                                          fieldName,
                                                                                                                          declr,
                                                                                                                          operator );
                         list.add( sourceBetaConstraint );
-                    } catch ( IntrospectionException e ) {
-                        throw new IllegalArgumentException();
-                    }
                 } else if ( "result".equals( type ) ) {
                     alphaResultConstraint = new AlphaNodeFieldConstraint[1];
-                    try {
                         alphaResultConstraint[0] = this.reteTesterHelper.getLiteralConstraint( resultPattern,
                                                                                                fieldName,
                                                                                                operator,
                                                                                                val );
-                    } catch ( IntrospectionException e ) {
-                        throw new IllegalArgumentException( "Unable to configure alpha constraint: " + Arrays.toString( a ),
-                                                            e );
-                    }
                 }
             }
             

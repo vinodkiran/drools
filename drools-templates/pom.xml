@@ -6,7 +6,7 @@
   <parent>
     <groupId>org.drools</groupId>
     <artifactId>drools</artifactId>
-    <version>6.4.0-SNAPSHOT</version>
+    <version>7.0.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>drools-templates</artifactId>
@@ -14,6 +14,10 @@
   <!-- bundle = jar + OSGi metadata -->
 
   <name>Drools :: Templates</name>
+
+  <properties>
+    <osgi.Bundle-SymbolicName>org.drools.templates</osgi.Bundle-SymbolicName>
+  </properties>
 
   <dependencies>
     <!-- Internal dependencies -->
@@ -50,7 +54,6 @@
         <artifactId>maven-bundle-plugin</artifactId>
         <configuration>
           <instructions>
-            <Bundle-SymbolicName>org.drools.templates</Bundle-SymbolicName>
             <Export-Package>
               org.drools.template.*
             </Export-Package>

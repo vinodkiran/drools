@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,6 @@ import org.drools.core.phreak.PhreakTimerNode.Scheduler;
 import org.drools.core.phreak.RuleAgendaItem;
 import org.drools.core.phreak.RuleExecutor;
 import org.drools.core.process.instance.WorkItem;
-import org.drools.core.reteoo.LeftTuple;
 import org.drools.core.reteoo.ObjectTypeConf;
 import org.drools.core.reteoo.TerminalNode;
 import org.drools.core.rule.EntryPointId;
@@ -51,6 +50,7 @@ import org.drools.core.spi.Activation;
 import org.drools.core.spi.FactHandleFactory;
 import org.drools.core.spi.GlobalResolver;
 import org.drools.core.spi.PropagationContext;
+import org.drools.core.spi.Tuple;
 import org.drools.core.time.Trigger;
 import org.drools.core.time.impl.CompositeMaxDurationTrigger;
 import org.drools.core.time.impl.CronTrigger;
@@ -127,28 +127,37 @@ public class ProtobufInputMarshaller {
      * Create a new session into which to read the stream data
      */
     public static StatefulKnowledgeSessionImpl readSession(MarshallerReaderContext context,
-                                                    int id) throws IOException,
-                                                           ClassNotFoundException {
-        StatefulKnowledgeSessionImpl session = readSession( context,
-                                                     id,
-                                                     EnvironmentFactory.newEnvironment(),
-                                                     SessionConfiguration.getDefaultInstance() );
-        return session;
+                                                           int id) throws IOException, ClassNotFoundException {
+        return readSession( context,
+                            id,
+                            EnvironmentFactory.newEnvironment(),
+                            SessionConfiguration.getDefaultInstance() );
     }
 
     public static StatefulKnowledgeSessionImpl readSession(MarshallerReaderContext context,
-                                                    int id,
-                                                    Environment environment,
-                                                    SessionConfiguration config) throws IOException,
-                                                                                ClassNotFoundException {
+                                                           int id,
+                                                           Environment environment,
+                                                           SessionConfiguration config) throws IOException, ClassNotFoundException {
+        return readSession( context, id, environment, config, null );
+    }
+
+    public static StatefulKnowledgeSessionImpl readSession(MarshallerReaderContext context,
+                                                           int id,
+                                                           Environment environment,
+                                                           SessionConfiguration config,
+                                                           KieSessionInitializer initializer) throws IOException, ClassNotFoundException {
 
         ProtobufMessages.KnowledgeSession _session = loadAndParseSession( context );
 
         StatefulKnowledgeSessionImpl session = createAndInitializeSession( context,
-                                                                    id,
-                                                                    environment,
-                                                                    config,
-                                                                    _session );
+                                                                           id,
+                                                                           environment,
+                                                                           config,
+                                                                           _session );
+        // Initialize the session before unmarshalling data
+        if (initializer != null) {
+            initializer.init( session );
+        }
 
         return readSession( _session,
                             session,
@@ -244,6 +253,9 @@ public class ProtobufInputMarshaller {
                              _ep,
                              ((InternalWorkingMemoryEntryPoint) wmep).getObjectStore(),
                              pctxs );
+
+            context.filter.fireRNEAs( context.wm );
+
             readTruthMaintenanceSystem( context,
                                         wmep,
                                         _ep,
@@ -478,8 +490,8 @@ public class ProtobufInputMarshaller {
                                             InternalFactHandle handle,
                                             List<PropagationContext> pctxs) {
         Object object = handle.getObject();
-        InternalWorkingMemoryEntryPoint ep = (InternalWorkingMemoryEntryPoint) handle.getEntryPoint();
-        ObjectTypeConf typeConf = ((InternalWorkingMemoryEntryPoint) handle.getEntryPoint()).getObjectTypeConfigurationRegistry().getObjectTypeConf( ep.getEntryPoint(), object );
+        InternalWorkingMemoryEntryPoint ep = handle.getEntryPoint();
+        ObjectTypeConf typeConf = ep.getObjectTypeConfigurationRegistry().getObjectTypeConf( ep.getEntryPoint(), object );
 
         PropagationContextFactory pctxFactory = wm.getKnowledgeBase().getConfiguration().getComponentFactory().getPropagationContextFactory();
 
@@ -532,7 +544,7 @@ public class ProtobufInputMarshaller {
                 handle = new DefaultFactHandle( _handle.getId(),
                                                 object,
                                                 _handle.getRecency(),
-                                                entryPoint,
+                                                (InternalWorkingMemoryEntryPoint) entryPoint,
                                                 typeConf != null && typeConf.isTrait() );
                 break;
             }
@@ -548,9 +560,10 @@ public class ProtobufInputMarshaller {
                                               _handle.getRecency(),
                                               _handle.getTimestamp(),
                                               _handle.getDuration(),
-                                              entryPoint,
+                                              (InternalWorkingMemoryEntryPoint) entryPoint,
                                               typeConf != null && typeConf.isTrait() );
                 ((EventFactHandle) handle).setExpired( _handle.getIsExpired() );
+                ((EventFactHandle) handle).setOtnCount( _handle.getOtnCount() );
                 // the event is re-propagated through the network, so the activations counter will be recalculated
                 //((EventFactHandle) handle).setActivationsCount( _handle.getActivationsCount() );
                 break;
@@ -611,6 +624,7 @@ public class ProtobufInputMarshaller {
             }
             tms.put( key );
 
+            context.filter.fireRNEAs( context.wm );
             readBeliefSet( context, tms, key, _key );
         }
 
@@ -631,7 +645,7 @@ public class ProtobufInputMarshaller {
                     Activation activation = (Activation) context.filter.getTuplesCache().get(
                                                                                               PersisterHelper.createActivationKey( _activation.getPackageName(),
                                                                                                                                    _activation.getRuleName(),
-                                                                                                                                   _activation.getTuple() ) ).getObject();
+                                                                                                                                   _activation.getTuple() ) ).getContextObject();
 
                     Object object = null;
                     ObjectMarshallingStrategy strategy = null;
@@ -771,13 +785,13 @@ public class ProtobufInputMarshaller {
             AgendaFilter {
         private Map<ActivationKey, ProtobufMessages.Activation> dormantActivations;
         private Map<ActivationKey, ProtobufMessages.Activation> rneActivations;
-        private Map<ActivationKey, LeftTuple>                   tuplesCache;
+        private Map<ActivationKey, Tuple>                       tuplesCache;
         private Queue<RuleAgendaItem>                           rneaToFire;
 
         public PBActivationsFilter() {
             this.dormantActivations = new HashMap<ProtobufInputMarshaller.ActivationKey, ProtobufMessages.Activation>();
             this.rneActivations = new HashMap<ProtobufInputMarshaller.ActivationKey, ProtobufMessages.Activation>();
-            this.tuplesCache = new HashMap<ProtobufInputMarshaller.ActivationKey, LeftTuple>();
+            this.tuplesCache = new HashMap<ProtobufInputMarshaller.ActivationKey, Tuple>();
             this.rneaToFire = new ConcurrentLinkedQueue<RuleAgendaItem>();
         }
 
@@ -803,7 +817,7 @@ public class ProtobufInputMarshaller {
             }
         }
 
-        public Map<ActivationKey, LeftTuple> getTuplesCache() {
+        public Map<ActivationKey, Tuple> getTuplesCache() {
             return tuplesCache;
         }
 
@@ -822,7 +836,7 @@ public class ProtobufInputMarshaller {
 
         @Override
         public boolean accept(Match match) {
-            LeftTuple tuple = ((Activation)match).getTuple();
+            Tuple tuple = ((Activation)match).getTuple();
             ActivationKey key = PersisterHelper.createActivationKey( match.getRule().getPackageName(), 
                                                                      match.getRule().getName(),
                                                                      tuple );

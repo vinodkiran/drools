@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package org.drools.core.rule;
 
 import org.drools.core.WorkingMemory;
+import org.drools.core.base.mvel.MVELEvalExpression;
 import org.drools.core.spi.CompiledInvoker;
 import org.drools.core.spi.EvalExpression;
 import org.drools.core.spi.Tuple;
@@ -93,9 +94,19 @@ public class EvalCondition extends ConditionalElement
     }
 
     public void wire(Object object) {
-        setEvalExpression( KiePolicyHelper.isPolicyEnabled() ? new SafeEvalExpression((EvalExpression) object) : (EvalExpression) object );
+        EvalExpression expression = KiePolicyHelper.isPolicyEnabled() ? new SafeEvalExpression((EvalExpression) object) : (EvalExpression) object;
+        setEvalExpression( expression );
         for ( EvalCondition clone : this.cloned ) {
-            clone.wire( object );
+            clone.wireClone( expression );
+        }
+    }
+
+    private void wireClone(EvalExpression expression) {
+        setEvalExpression( this.expression instanceof MVELEvalExpression && expression instanceof MVELEvalExpression ?
+                           ( (MVELEvalExpression) expression ).clonePreservingDeclarations( (MVELEvalExpression) this.expression ) :
+                           expression );
+        for ( EvalCondition clone : this.cloned ) {
+            clone.wireClone( expression );
         }
     }
 

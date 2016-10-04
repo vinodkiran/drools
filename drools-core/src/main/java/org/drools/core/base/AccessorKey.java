@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package org.drools.core.base;
 
-import java.beans.*;
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -40,7 +39,7 @@ public class AccessorKey
                        AccessorType type) {
         super();
         this.className = className;
-        this.fieldName = Introspector.decapitalize(fieldName);
+        this.fieldName = ClassFieldReader.decapitalizeFieldName(fieldName);
 
         final int PRIME = 31;
         int result = 1;

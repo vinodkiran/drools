@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,12 @@ package org.drools.core.common;
 
 import org.drools.core.RuleBaseConfiguration;
 import org.drools.core.reteoo.BetaMemory;
-import org.drools.core.reteoo.LeftTuple;
 import org.drools.core.reteoo.builder.BuildContext;
 import org.drools.core.rule.ContextEntry;
 import org.drools.core.rule.MutableTypeConstraint;
 import org.drools.core.rule.constraint.MvelConstraint;
 import org.drools.core.spi.BetaNodeFieldConstraint;
+import org.drools.core.spi.Tuple;
 import org.drools.core.util.bitmask.BitMask;
 import org.drools.core.util.index.IndexUtil;
 
@@ -114,7 +114,7 @@ public class SingleBetaConstraints
      */
     public void updateFromTuple(final ContextEntry[] context,
                                 final InternalWorkingMemory workingMemory,
-                                final LeftTuple tuple) {
+                                final Tuple tuple) {
         context[0].updateFromTuple(workingMemory,
                                    tuple);
     }
@@ -142,9 +142,8 @@ public class SingleBetaConstraints
      * @see org.kie.common.BetaNodeConstraints#isAllowedCachedRight(org.kie.reteoo.ReteTuple)
      */
     public boolean isAllowedCachedRight(final ContextEntry[] context,
-                                        final LeftTuple tuple) {
-        return this.constraint.isAllowedCachedRight(tuple,
-                                                    context[0]);
+                                        final Tuple tuple) {
+        return this.constraint.isAllowedCachedRight(tuple, context[0]);
     }
 
     public boolean isIndexed() {

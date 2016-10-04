@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.drools.core.rule;
 import org.drools.core.common.EventFactHandle;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalWorkingMemory;
-import org.drools.core.common.PropagationContextFactory;
 import org.drools.core.reteoo.ObjectTypeNode;
 import org.drools.core.spi.PropagationContext;
 
@@ -29,6 +28,8 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.Collection;
 import java.util.Collections;
+
+import static org.drools.core.common.PhreakPropagationContextFactory.createPropagationContextForFact;
 
 /**
  * A length window behavior implementation
@@ -106,9 +107,7 @@ public class SlidingLengthWindow
         if ( window.handles[window.pos] != null ) {
             final EventFactHandle previous = window.handles[window.pos];
             // retract previous
-            PropagationContextFactory pctxFactory = workingMemory.getKnowledgeBase().getConfiguration().getComponentFactory().getPropagationContextFactory();
-            final PropagationContext expiresPctx = pctxFactory.createPropagationContext(pctx.getPropagationNumber(), PropagationContext.EXPIRATION,
-                                                                                        null, null, previous);
+            final PropagationContext expiresPctx = createPropagationContextForFact( workingMemory, previous, PropagationContext.EXPIRATION );
             ObjectTypeNode.doRetractObject( previous, expiresPctx, workingMemory);
             expiresPctx.evaluateActionQueue( workingMemory );
         }

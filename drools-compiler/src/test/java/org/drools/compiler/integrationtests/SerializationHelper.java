@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
 
 package org.drools.compiler.integrationtests;
 
-import org.drools.core.SessionConfiguration;
 import org.drools.core.marshalling.impl.ProtobufMarshaller;
 import org.drools.core.util.DroolsStreamUtils;
 import org.kie.api.KieBase;
@@ -102,7 +101,7 @@ public class SerializationHelper {
         {
             ByteArrayInputStream bais = new ByteArrayInputStream( b1 );
             ksession2 = marshaller.unmarshall( bais,
-                                               SessionConfiguration.newInstance(),
+                                               ksession.getSessionConfiguration(),
                                                ksession.getEnvironment());
             bais.close();
         }

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <kmodule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xmlns="http://jboss.org/kie/6.0.0/kmodule">
+         xmlns="http://www.drools.org/xsd/kmodule">
 
-    <kbase name="HelloWorldKB" packages="org.drools.examples.helloworld">
+    <kbase packages="org.drools.examples.helloworld">
         <ksession name="HelloWorldKS"/>
     </kbase>
 
@@ -74,13 +74,13 @@
         <ksession name="DecisionTableKS" type="stateless"/>
     </kbase>
 
-    <kbase name="DTableWithTemplateKB" packages="org.drools.examples.decisiontable">
-        <ruleTemplate dtable="org/drools/examples/decisiontable/ExamplePolicyPricing.xls"
-                      template="org/drools/examples/decisiontable/BasePricing.drt"
-                      row="10" col="3"/>
-        <ruleTemplate dtable="org/drools/examples/decisiontable/ExamplePolicyPricing.xls"
-                      template="org/drools/examples/decisiontable/PromotionalPricing.drt"
-                      row="30" col="3"/>
+    <kbase name="DTableWithTemplateKB" packages="org.drools.examples.decisiontable-template">
+        <ruleTemplate dtable="org/drools/examples/decisiontable-template/ExamplePolicyPricingTemplateData.xls"
+                      template="org/drools/examples/decisiontable-template/BasePricing.drt"
+                      row="3" col="3"/>
+        <ruleTemplate dtable="org/drools/examples/decisiontable-template/ExamplePolicyPricingTemplateData.xls"
+                      template="org/drools/examples/decisiontable-template/PromotionalPricing.drt"
+                      row="18" col="3"/>
         <ksession name="DTableWithTemplateKS"/>
     </kbase>
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import org.drools.core.common.InternalAgenda;
 import org.drools.core.common.InternalAgendaGroup;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalWorkingMemory;
-import org.drools.core.common.LeftTupleSets;
+import org.drools.core.common.TupleSets;
 import org.drools.core.definitions.rule.impl.RuleImpl;
 import org.drools.core.reteoo.LeftTuple;
 import org.drools.core.reteoo.RuleTerminalNode;
@@ -31,6 +31,7 @@ import org.drools.core.reteoo.TerminalNode;
 import org.drools.core.spi.Activation;
 import org.drools.core.spi.PropagationContext;
 import org.drools.core.spi.Salience;
+import org.drools.core.spi.Tuple;
 import org.kie.api.event.rule.MatchCancelledCause;
 
 /**
@@ -43,7 +44,7 @@ import org.kie.api.event.rule.MatchCancelledCause;
 public class PhreakRuleTerminalNode {
     public void doNode(TerminalNode rtnNode,
                        InternalWorkingMemory wm,
-                       LeftTupleSets srcLeftTuples,
+                       TupleSets<LeftTuple> srcLeftTuples,
                        RuleExecutor executor) {
         if (srcLeftTuples.getDeleteFirst() != null) {
             doLeftDeletes(wm, srcLeftTuples, executor);
@@ -62,7 +63,7 @@ public class PhreakRuleTerminalNode {
 
     public void doLeftInserts(TerminalNode rtnNode,
                               InternalWorkingMemory wm,
-                              LeftTupleSets srcLeftTuples,
+                              TupleSets<LeftTuple> srcLeftTuples,
                               RuleExecutor executor) {
         InternalAgenda agenda = wm.getAgenda();
         RuleAgendaItem ruleAgendaItem = executor.getRuleAgendaItem();
@@ -135,7 +136,7 @@ public class PhreakRuleTerminalNode {
 
     public void doLeftUpdates(TerminalNode rtnNode,
                               InternalWorkingMemory wm,
-                              LeftTupleSets srcLeftTuples,
+                              TupleSets<LeftTuple> srcLeftTuples,
                               RuleExecutor executor) {
         RuleAgendaItem ruleAgendaItem = executor.getRuleAgendaItem();
         if ( rtnNode.getRule().getAutoFocus() && !ruleAgendaItem.getAgendaGroup().isActive() ) {
@@ -220,7 +221,7 @@ public class PhreakRuleTerminalNode {
     }
 
     public void doLeftDeletes(InternalWorkingMemory wm,
-                              LeftTupleSets srcLeftTuples,
+                              TupleSets<LeftTuple> srcLeftTuples,
                               RuleExecutor executor) {
 
         for (LeftTuple leftTuple = srcLeftTuples.getDeleteFirst(); leftTuple != null; ) {
@@ -232,7 +233,7 @@ public class PhreakRuleTerminalNode {
         }
     }
 
-    public static void doLeftDelete(InternalWorkingMemory wm, RuleExecutor executor, LeftTuple leftTuple) {
+    public static void doLeftDelete(InternalWorkingMemory wm, RuleExecutor executor, Tuple leftTuple) {
         PropagationContext pctx = leftTuple.getPropagationContext();
         pctx = RuleTerminalNode.findMostRecentPropagationContext(leftTuple, pctx);
 
@@ -247,13 +248,13 @@ public class PhreakRuleTerminalNode {
                                          activation,
                                          rtnLt.getTerminalNode() );
 
-        if ( leftTuple.getMemory() != null && (pctx.getType() != PropagationContext.EXPIRATION  ) ) {
+        if ( leftTuple.getMemory() != null ) {
             // Expiration propagations should not be removed from the list, as they still need to fire
             executor.removeLeftTuple(leftTuple);
         }
 
         rtnLt.setActivationUnMatchListener(null);
-        leftTuple.setObject(null);
+        leftTuple.setContextObject( null );
     }
 
     private static boolean blockedByLockOnActive(RuleImpl rule,

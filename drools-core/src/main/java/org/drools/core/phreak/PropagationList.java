@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,9 @@ public interface PropagationList {
     PropagationEntry takeAll();
 
     void flush();
+    void flush( PropagationEntry currentHead );
 
     void flushNonMarshallable();
-
-    void flushOnFireUntilHalt( boolean fired );
-    void flushOnFireUntilHalt( boolean fired, PropagationEntry currentHead );
-
-    void onEngineInactive();
 
     void reset();
 
@@ -37,5 +33,9 @@ public interface PropagationList {
 
     Iterator<PropagationEntry> iterator();
 
-    void notifyHalt();
+    void waitOnRest();
+
+    void notifyWaitOnRest();
+
+    void onEngineInactive();
 }

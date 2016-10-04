@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,16 +15,18 @@
 
 package org.drools.compiler.kie.builder.impl;
 
-import static org.drools.core.util.IoUtils.readBytesFromInputStream;
+import org.drools.core.util.IoUtils;
+import org.kie.api.builder.ReleaseId;
+import org.kie.api.builder.model.KieModuleModel;
+import org.kie.api.io.Resource;
+import org.kie.internal.io.ResourceFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Collection;
 
-import org.drools.core.util.IoUtils;
-import org.kie.api.builder.ReleaseId;
-import org.kie.api.builder.model.KieModuleModel;
+import static org.drools.core.util.IoUtils.readBytesFromInputStream;
 
 public class FileKieModule extends AbstractKieModule implements InternalKieModule {
     private final File             file;   
@@ -52,19 +54,34 @@ public class FileKieModule extends AbstractKieModule implements InternalKieModul
 
 
     @Override
-    public byte[] getBytes(String pResourceName) {
+    public byte[] getBytes(String pResourceName ) {
+        FileInputStream input = null;
         try {
             File resource = new File( file, pResourceName);
             if( resource.exists() ) {
-                return IoUtils.readBytesFromInputStream( new FileInputStream( resource ) );
+                input = new FileInputStream( resource );
+                return IoUtils.readBytesFromInputStream( input );
             } else {
                 return null;
             }
-        } catch ( Exception e ) {
-            throw new RuntimeException("Unable to get bytes for: " + new File( file, pResourceName) );
+        } catch ( IOException e ) {
+            throw new RuntimeException("Unable to get bytes for: " + new File( file, pResourceName) + " " +e.getMessage());
+        } finally {
+            if( input != null ){
+                try {
+                    input.close();
+                } catch ( IOException e ) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
+    @Override
+    public Resource getResource( String fileName ) {
+        File resource = new File( file, fileName);
+        return resource.exists() ? ResourceFactory.newFileResource( resource ) : null;
+    }
 
     @Override
     public Collection<String> getFileNames() {

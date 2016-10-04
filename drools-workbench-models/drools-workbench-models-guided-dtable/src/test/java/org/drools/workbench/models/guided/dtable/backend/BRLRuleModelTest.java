@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 JBoss Inc
+ * Copyright 2012 Red Hat, Inc. and/or its affiliates.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,6 +22,7 @@ import org.drools.workbench.models.datamodel.rule.ActionUpdateField;
 import org.drools.workbench.models.datamodel.rule.BaseSingleFieldConstraint;
 import org.drools.workbench.models.datamodel.rule.FactPattern;
 import org.drools.workbench.models.datamodel.rule.FieldConstraint;
+import org.drools.workbench.models.datamodel.rule.FreeFormLine;
 import org.drools.workbench.models.datamodel.rule.SingleFieldConstraint;
 import org.drools.workbench.models.guided.dtable.backend.util.DataUtilities;
 import org.drools.workbench.models.guided.dtable.shared.model.ActionInsertFactCol52;
@@ -35,6 +36,7 @@ import org.drools.workbench.models.guided.dtable.shared.model.GuidedDecisionTabl
 import org.drools.workbench.models.guided.dtable.shared.model.Pattern52;
 import org.drools.workbench.models.guided.dtable.shared.model.adaptors.ActionInsertFactCol52ActionInsertFactAdaptor;
 import org.drools.workbench.models.guided.dtable.shared.model.adaptors.ActionInsertFactCol52ActionInsertLogicalFactAdaptor;
+import org.drools.workbench.models.guided.dtable.shared.model.adaptors.ConditionCol52FieldConstraintAdaptor;
 import org.drools.workbench.models.guided.dtable.shared.model.adaptors.Pattern52FactPatternAdaptor;
 import org.junit.Test;
 
@@ -245,6 +247,37 @@ public class BRLRuleModelTest {
     }
 
     @Test
+    public void testDecisionTableColumnsWithLHSBoundFieldsInConditionCol52() {
+        GuidedDecisionTable52 dt = new GuidedDecisionTable52();
+
+        Pattern52 p1 = new Pattern52();
+        p1.setFactType( "Driver" );
+        p1.setBoundName( "$p1" );
+
+        ConditionCol52 c1 = new ConditionCol52();
+        c1.setFactField( "name" );
+        c1.setFieldType( DataType.TYPE_STRING );
+        c1.setConstraintValueType( BaseSingleFieldConstraint.TYPE_LITERAL );
+        c1.setBinding( "$c1" );
+
+        p1.getChildColumns().add( c1 );
+        dt.getConditions().add( p1 );
+
+        BRLRuleModel model = new BRLRuleModel( dt );
+
+        FieldConstraint fcr1 = model.getLHSBoundField( "$c1" );
+        assertNotNull( fcr1 );
+        assertTrue( fcr1 instanceof ConditionCol52FieldConstraintAdaptor );
+        ConditionCol52FieldConstraintAdaptor fcr1sfc = (ConditionCol52FieldConstraintAdaptor) fcr1;
+        assertEquals( "Driver",
+                      fcr1sfc.getFactType() );
+        assertEquals( "name",
+                      fcr1sfc.getFieldName() );
+        assertEquals( DataType.TYPE_STRING,
+                      fcr1sfc.getFieldType() );
+    }
+
+    @Test
     public void testDecisionTableColumnsWithRHS() {
         GuidedDecisionTable52 dt = new GuidedDecisionTable52();
 
@@ -321,7 +354,6 @@ public class BRLRuleModelTest {
         assertNull( raif2.getFieldValues()[ 0 ].getValue() );
         assertEquals( BaseSingleFieldConstraint.TYPE_LITERAL,
                       raif2.getFieldValues()[ 0 ].getNature() );
-
     }
 
     @Test
@@ -416,7 +448,6 @@ public class BRLRuleModelTest {
         assertNull( raif3.getFieldValues()[ 0 ].getValue() );
         assertEquals( BaseSingleFieldConstraint.TYPE_LITERAL,
                       raif3.getFieldValues()[ 0 ].getNature() );
-
     }
 
     @Test
@@ -736,6 +767,7 @@ public class BRLRuleModelTest {
                 "    setName( \"Fred\" )\n" +
                 "}\n" +
                 "end\n";
+
         assertEqualsIgnoreWhitespace( expected1,
                                       drl );
 
@@ -754,6 +786,7 @@ public class BRLRuleModelTest {
                 "    setName( \"Fred\" )\n" +
                 "}\n" +
                 "end\n";
+
         assertEqualsIgnoreWhitespace( expected2,
                                       drl );
 
@@ -772,6 +805,7 @@ public class BRLRuleModelTest {
                 "    setAge( 55 ) \n" +
                 "}\n" +
                 "end\n";
+
         assertEqualsIgnoreWhitespace( expected3,
                                       drl );
     }
@@ -844,6 +878,7 @@ public class BRLRuleModelTest {
                 "    setF3( \"v3\" )\n" +
                 "}\n" +
                 "end\n";
+
         assertEqualsIgnoreWhitespace( expected,
                                       drl );
     }
@@ -915,6 +950,7 @@ public class BRLRuleModelTest {
                 "    setF3( \"v3\" )\n" +
                 "}\n" +
                 "end\n";
+
         assertEqualsIgnoreWhitespace( expected,
                                       drl );
     }
@@ -985,6 +1021,7 @@ public class BRLRuleModelTest {
                 "    setF3( \"v3\" )\n" +
                 "}\n" +
                 "end\n";
+
         assertEqualsIgnoreWhitespace( expected,
                                       drl );
     }
@@ -1056,6 +1093,7 @@ public class BRLRuleModelTest {
                 "    setF3( \"v3\" )\n" +
                 "}\n" +
                 "end\n";
+
         assertEqualsIgnoreWhitespace( expected,
                                       drl );
     }
@@ -1105,7 +1143,7 @@ public class BRLRuleModelTest {
 
         //Test 1
         dt.setData( DataUtilities.makeDataLists( new Object[][]{
-                new Object[]{ 1l, "desc-row1", null, null },
+                new Object[]{ 1l, "desc-row1", "Pupa", null },
         } ) );
 
         String drl1 = p.marshal( dt );
@@ -1114,6 +1152,7 @@ public class BRLRuleModelTest {
                 "rule \"Row 1 extended-entry\"\n" +
                 "  dialect \"mvel\"\n" +
                 "  when\n" +
+                "    p1 : Smurf( name == \"Pupa\" )\n" +
                 "  then\n" +
                 "end";
 
@@ -1122,7 +1161,7 @@ public class BRLRuleModelTest {
 
         //Test 2
         dt.setData( DataUtilities.makeDataLists( new Object[][]{
-                new Object[]{ 2l, "desc-row2", "   ", 35l },
+                new Object[]{ 2l, "desc-row2", null, 35l },
         } ) );
 
         String drl2 = p.marshal( dt );
@@ -1140,7 +1179,7 @@ public class BRLRuleModelTest {
 
         //Test 3
         dt.setData( DataUtilities.makeDataLists( new Object[][]{
-                new Object[]{ 3l, "desc-row3", "", null },
+                new Object[]{ 3l, "desc-row3", "Pupa", 35l },
         } ) );
 
         String drl3 = p.marshal( dt );
@@ -1149,6 +1188,7 @@ public class BRLRuleModelTest {
                 "rule \"Row 3 extended-entry\"\n" +
                 "  dialect \"mvel\"\n" +
                 "  when\n" +
+                "    p1 : Smurf( name == \"Pupa\", age == 35 )\n" +
                 "  then\n" +
                 "end";
 
@@ -1157,7 +1197,7 @@ public class BRLRuleModelTest {
 
         //Test 4
         dt.setData( DataUtilities.makeDataLists( new Object[][]{
-                new Object[]{ 4l, "desc-row4", "", 35l },
+                new Object[]{ 4l, "desc-row4", null, null },
         } ) );
 
         String drl4 = p.marshal( dt );
@@ -1166,7 +1206,6 @@ public class BRLRuleModelTest {
                 "rule \"Row 4 extended-entry\"\n" +
                 "  dialect \"mvel\"\n" +
                 "  when\n" +
-                "    p1 : Smurf( age == 35 )\n" +
                 "  then\n" +
                 "end";
 
@@ -1282,6 +1321,100 @@ public class BRLRuleModelTest {
                 "  dialect \"mvel\"\n" +
                 "  when\n" +
                 "    p1 : Smurf( name == \"\", age == 35 )\n" +
+                "  then\n" +
+                "end";
+
+        assertEqualsIgnoreWhitespace( expected4,
+                                      drl4 );
+    }
+
+    @Test
+    public void testLHSNonEmptyStringValuesFreeFormLine() {
+        GuidedDecisionTable52 dt = new GuidedDecisionTable52();
+        dt.setTableFormat( GuidedDecisionTable52.TableFormat.EXTENDED_ENTRY );
+        dt.setTableName( "extended-entry" );
+
+        BRLConditionColumn brlCondition = new BRLConditionColumn();
+        FreeFormLine ffl = new FreeFormLine();
+        ffl.setText( "p1 : Smurf( name ==\"@{$f1}\", age == @{$f2} )" );
+
+        brlCondition.getDefinition().add( ffl );
+        brlCondition.getChildColumns().add( new BRLConditionVariableColumn( "$f1",
+                                                                            DataType.TYPE_STRING,
+                                                                            "Smurf",
+                                                                            "name" ) );
+        brlCondition.getChildColumns().add( new BRLConditionVariableColumn( "$f2",
+                                                                            DataType.TYPE_NUMERIC_INTEGER,
+                                                                            "Smurf",
+                                                                            "age" ) );
+
+        dt.getConditions().add( brlCondition );
+
+        GuidedDTDRLPersistence p = GuidedDTDRLPersistence.getInstance();
+
+        //Test 1
+        dt.setData( DataUtilities.makeDataLists( new Object[][]{
+                new Object[]{ 1l, "desc-row1", "Pupa", null },
+        } ) );
+
+        String drl1 = p.marshal( dt );
+        final String expected1 = "//from row number: 1\n" +
+                "//desc-row1\n" +
+                "rule \"Row 1 extended-entry\"\n" +
+                "  dialect \"mvel\"\n" +
+                "  when\n" +
+                "  then\n" +
+                "end";
+
+        assertEqualsIgnoreWhitespace( expected1,
+                                      drl1 );
+
+        //Test 2
+        dt.setData( DataUtilities.makeDataLists( new Object[][]{
+                new Object[]{ 2l, "desc-row2", null, 35l },
+        } ) );
+
+        String drl2 = p.marshal( dt );
+        final String expected2 = "//from row number: 1\n" +
+                "//desc-row2\n" +
+                "rule \"Row 2 extended-entry\"\n" +
+                "  dialect \"mvel\"\n" +
+                "  when\n" +
+                "  then\n" +
+                "end";
+
+        assertEqualsIgnoreWhitespace( expected2,
+                                      drl2 );
+
+        //Test 3
+        dt.setData( DataUtilities.makeDataLists( new Object[][]{
+                new Object[]{ 3l, "desc-row3", "Pupa", 35l },
+        } ) );
+
+        String drl3 = p.marshal( dt );
+        final String expected3 = "//from row number: 1\n" +
+                "//desc-row3\n" +
+                "rule \"Row 3 extended-entry\"\n" +
+                "  dialect \"mvel\"\n" +
+                "  when\n" +
+                "    p1 : Smurf( name == \"Pupa\", age == 35 )\n" +
+                "  then\n" +
+                "end";
+
+        assertEqualsIgnoreWhitespace( expected3,
+                                      drl3 );
+
+        //Test 4
+        dt.setData( DataUtilities.makeDataLists( new Object[][]{
+                new Object[]{ 4l, "desc-row4", null, null },
+        } ) );
+
+        String drl4 = p.marshal( dt );
+        final String expected4 = "//from row number: 1\n" +
+                "//desc-row4\n" +
+                "rule \"Row 4 extended-entry\"\n" +
+                "  dialect \"mvel\"\n" +
+                "  when\n" +
                 "  then\n" +
                 "end";
 

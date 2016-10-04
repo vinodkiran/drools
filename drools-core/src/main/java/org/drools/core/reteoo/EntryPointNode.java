@@ -1,5 +1,5 @@
 /*
- * Copyright 2007 JBoss Inc
+ * Copyright 2007 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import org.drools.core.common.PropagationContextFactory;
 import org.drools.core.common.RuleBasePartitionId;
 import org.drools.core.phreak.PropagationEntry;
 import org.drools.core.reteoo.LeftInputAdapterNode.LiaNodeMemory;
-import org.drools.core.reteoo.ObjectTypeNode.ObjectTypeNodeMemory;
 import org.drools.core.reteoo.builder.BuildContext;
 import org.drools.core.rule.EntryPointId;
 import org.drools.core.spi.ObjectType;
@@ -109,6 +108,8 @@ public class EntryPointNode extends ObjectSource
                999 ); // irrelevant for this node, since it overrides sink management
         this.entryPoint = entryPoint;
         this.objectTypeNodes = new ConcurrentHashMap<ObjectType, ObjectTypeNode>();
+
+        hashcode = calculateHashCode();
     }
 
     // ------------------------------------------------------------
@@ -253,7 +254,7 @@ public class EntryPointNode extends ObjectSource
             if (i < cachedNodes.length - 1) {
                 RightTuple rightTuple = modifyPreviousTuples.peekRightTuple();
                 while ( rightTuple != null &&
-                        ((BetaNode) rightTuple.getRightTupleSink()).getObjectTypeNode() == cachedNodes[i] ) {
+                        ((BetaNode) rightTuple.getTupleSink()).getObjectTypeNode() == cachedNodes[i] ) {
                     modifyPreviousTuples.removeRightTuple();
 
                     doRightDelete(pctx, wm, rightTuple);
@@ -268,7 +269,7 @@ public class EntryPointNode extends ObjectSource
                     leftTuple = modifyPreviousTuples.peekLeftTuple();
                     otn = null;
                     if (leftTuple != null) {
-                        LeftTupleSink leftTupleSink = leftTuple.getLeftTupleSink();
+                        LeftTupleSink leftTupleSink = leftTuple.getTupleSink();
                         if (leftTupleSink instanceof LeftTupleSource) {
                             otn = leftTupleSink.getLeftTupleSource().getObjectTypeNode();
                         } else if (leftTupleSink instanceof RuleTerminalNode) {
@@ -287,14 +288,14 @@ public class EntryPointNode extends ObjectSource
     }
 
     public void doDeleteObject(PropagationContext pctx, InternalWorkingMemory wm, LeftTuple leftTuple) {
-        LeftInputAdapterNode liaNode = (LeftInputAdapterNode) leftTuple.getLeftTupleSink().getLeftTupleSource();
-        LiaNodeMemory lm = ( LiaNodeMemory )  wm.getNodeMemory( liaNode );
+        LeftInputAdapterNode liaNode = leftTuple.getTupleSource();
+        LiaNodeMemory lm = wm.getNodeMemory( liaNode );
         LeftInputAdapterNode.doDeleteObject(leftTuple, pctx, lm.getSegmentMemory(), wm, liaNode, true, lm);
     }
 
     public void doRightDelete(PropagationContext pctx, InternalWorkingMemory wm, RightTuple rightTuple) {
         rightTuple.setPropagationContext( pctx );
-        rightTuple.getRightTupleSink().retractRightTuple(rightTuple, pctx, wm);
+        rightTuple.retractTuple( pctx, wm );
     }
 
     public void modifyObject(InternalFactHandle factHandle,
@@ -386,6 +387,10 @@ public class EntryPointNode extends ObjectSource
         return false;
     }
 
+    public void attach() {
+        attach(null);
+    }
+
     public void attach( BuildContext context ) {
         this.source.addObjectSink( this );
         if (context == null ) {
@@ -418,21 +423,22 @@ public class EntryPointNode extends ObjectSource
         return this.objectTypeNodes;
     }
 
-    public int hashCode() {
+    private int calculateHashCode() {
         return this.entryPoint.hashCode();
     }
 
+    @Override
     public boolean equals(final Object object) {
-        if ( object == this ) {
-            return true;
-        }
+        return this == object || internalEquals( object );
+    }
 
-        if ( object == null || !(object instanceof EntryPointNode) ) {
+    @Override
+    protected boolean internalEquals( Object object ) {
+        if ( object == null || !(object instanceof EntryPointNode) || this.hashCode() != object.hashCode() ) {
             return false;
         }
 
-        final EntryPointNode other = (EntryPointNode) object;
-        return this.entryPoint.equals( other.entryPoint );
+        return this.entryPoint.equals( ((EntryPointNode)object).entryPoint );
     }
 
     public void updateSink(final ObjectSink sink,
@@ -450,7 +456,7 @@ public class EntryPointNode extends ObjectSource
             if ( objectTypeConf.getConcreteObjectTypeNode() != null && newObjectType.isAssignableFrom( objectTypeConf.getConcreteObjectTypeNode().getObjectType() ) ) {
                 objectTypeConf.resetCache();
                 ObjectTypeNode sourceNode = objectTypeConf.getConcreteObjectTypeNode();
-                Iterator<InternalFactHandle> it = ((ObjectTypeNodeMemory) workingMemory.getNodeMemory( sourceNode )).iterator();
+                Iterator<InternalFactHandle> it = workingMemory.getNodeMemory( sourceNode ).iterator();
                 while ( it.hasNext() ) {
                     sink.assertObject( it.next(),
                                        context,

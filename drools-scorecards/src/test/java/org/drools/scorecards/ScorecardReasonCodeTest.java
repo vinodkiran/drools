@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ public class ScorecardReasonCodeTest {
         PMML pmml = scorecardCompiler.getPMMLDocument();
         for (Object serializable : pmml.getAssociationModelsAndBaselineModelsAndClusteringModels()){
             if (serializable instanceof Scorecard){
-                assertFalse(((Scorecard) serializable).isUseReasonCodes());
+                assertFalse(((Scorecard) serializable).getUseReasonCodes());
             }
         }
     }
@@ -87,7 +87,7 @@ public class ScorecardReasonCodeTest {
 
         for (Object serializable : pmmlDocument.getAssociationModelsAndBaselineModelsAndClusteringModels()){
             if (serializable instanceof Scorecard){
-                assertTrue(((Scorecard)serializable).isUseReasonCodes());
+                assertTrue(((Scorecard)serializable).getUseReasonCodes());
                 assertEquals(100.0, ((Scorecard)serializable).getInitialScore(), 0.0);
                 assertEquals("pointsBelow",((Scorecard)serializable).getReasonCodeAlgorithm());
             }

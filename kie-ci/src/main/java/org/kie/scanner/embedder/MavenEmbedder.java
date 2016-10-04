@@ -36,14 +36,18 @@ import org.apache.maven.project.ProjectBuildingResult;
 import org.apache.maven.repository.RepositorySystem;
 import org.apache.maven.settings.Settings;
 import org.apache.maven.settings.building.DefaultSettingsBuildingRequest;
+import org.apache.maven.settings.building.FileSettingsSource;
 import org.apache.maven.settings.building.SettingsBuilder;
 import org.apache.maven.settings.building.SettingsBuildingException;
 import org.apache.maven.settings.building.SettingsBuildingRequest;
+import org.apache.maven.settings.building.SettingsSource;
+import org.codehaus.plexus.PlexusContainer;
 import org.codehaus.plexus.component.repository.exception.ComponentLookupException;
 import org.codehaus.plexus.logging.Logger;
 import org.codehaus.plexus.util.Os;
 import org.eclipse.aether.RepositorySystemSession;
 import org.kie.scanner.MavenRepositoryConfiguration;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -55,7 +59,12 @@ import java.util.Locale;
 import java.util.Map.Entry;
 import java.util.Properties;
 
+import static org.drools.core.util.IoUtils.copyInTempFile;
+
+
 public class MavenEmbedder {
+
+    private static final org.slf4j.Logger log = LoggerFactory.getLogger(MavenEmbedder.class);
 
     public static final File DEFAULT_GLOBAL_SETTINGS_FILE =
             new File( System.getProperty( "maven.home", System.getProperty( "user.dir", "" ) ), "conf/settings.xml" );
@@ -64,6 +73,8 @@ public class MavenEmbedder {
     private final ComponentProvider componentProvider;
 
     private MavenExecutionRequest mavenExecutionRequest;
+
+    private MavenSession mavenSession;
 
     public MavenEmbedder( MavenRequest mavenRequest ) throws MavenEmbedderException {
         this( Thread.currentThread().getContextClassLoader(), null, mavenRequest );
@@ -85,12 +96,14 @@ public class MavenEmbedder {
 
             RepositorySystemSession rss = ( (DefaultMaven) componentProvider.lookup( Maven.class ) ).newRepositorySession( mavenExecutionRequest );
 
-            MavenSession mavenSession = new MavenSession( componentProvider.getPlexusContainer(), rss, mavenExecutionRequest, new DefaultMavenExecutionResult() );
+            mavenSession = new MavenSession( componentProvider.getPlexusContainer(), rss, mavenExecutionRequest, new DefaultMavenExecutionResult() );
 
             componentProvider.lookup( LegacySupport.class ).setSession( mavenSession );
         } catch ( MavenEmbedderException e ) {
+            log.error( "Unable to build MavenEmbedder", e );
             throw new MavenEmbedderException( e.getMessage(), e );
         } catch ( ComponentLookupException e ) {
+            log.error( "Unable to build MavenEmbedder", e );
             throw new MavenEmbedderException( e.getMessage(), e );
         }
     }
@@ -103,8 +116,17 @@ public class MavenEmbedder {
             mavenExecutionRequest.setGlobalSettingsFile( new File( mavenRequest.getGlobalSettingsFile() ) );
         }
 
-        if ( mavenRequest.getUserSettingsFile() != null ) {
-            mavenExecutionRequest.setUserSettingsFile( new File( mavenRequest.getUserSettingsFile() ) );
+        SettingsSource userSettings = mavenRequest.getUserSettingsSource();
+        if ( userSettings != null ) {
+            if ( userSettings instanceof FileSettingsSource ) {
+                mavenExecutionRequest.setUserSettingsFile( ( (FileSettingsSource) userSettings ).getSettingsFile() );
+            } else {
+                try {
+                    mavenExecutionRequest.setUserSettingsFile( copyInTempFile( userSettings.getInputStream(), "xml" ) );
+                } catch (IOException ioe) {
+                    log.warn( "Unable to use maven settings defined in " + userSettings, ioe );
+                }
+            }
         }
 
         try {
@@ -190,12 +212,12 @@ public class MavenEmbedder {
         } else {
             settingsBuildingRequest.setGlobalSettingsFile( DEFAULT_GLOBAL_SETTINGS_FILE );
         }
-        if ( this.mavenRequest.getUserSettingsFile() != null ) {
-            settingsBuildingRequest.setUserSettingsFile( new File( this.mavenRequest.getUserSettingsFile() ) );
+        if ( this.mavenRequest.getUserSettingsSource() != null ) {
+            settingsBuildingRequest.setUserSettingsSource( this.mavenRequest.getUserSettingsSource() );
         } else {
-            File userSettingsFile = MavenSettings.getUserSettingsFile();
-            if ( userSettingsFile != null ) {
-                settingsBuildingRequest.setUserSettingsFile( userSettingsFile );
+            SettingsSource userSettingsSource = MavenSettings.getUserSettingsSource();
+            if ( userSettingsSource != null ) {
+                settingsBuildingRequest.setUserSettingsSource( userSettingsSource );
             }
         }
 
@@ -331,5 +353,16 @@ public class MavenEmbedder {
         projectBuildingRequest.setProcessPlugins( this.mavenRequest.isProcessPlugins() );
         projectBuildingRequest.setResolveDependencies( this.mavenRequest.isResolveDependencies() );
         return projectBuildingRequest;
+    }
+
+    public MavenSession getMavenSession() {
+        return mavenSession;
+    }
+
+    public void dispose() {
+        PlexusContainer plexusContainer = componentProvider.getPlexusContainer();
+        if (plexusContainer != null) {
+            plexusContainer.dispose();
+        }
     }
 }

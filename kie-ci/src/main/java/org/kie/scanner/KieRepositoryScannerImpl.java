@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import org.drools.compiler.kie.builder.impl.ResultsImpl;
 import org.drools.compiler.kie.builder.impl.ZipKieModule;
 import org.drools.compiler.kproject.ReleaseIdImpl;
 import org.drools.compiler.kproject.models.KieModuleModelImpl;
+import org.drools.compiler.kproject.xml.DependencyFilter;
 import org.drools.compiler.kproject.xml.PomModel;
 import org.eclipse.aether.artifact.Artifact;
 import org.kie.api.KieServices;
@@ -86,7 +87,7 @@ public class KieRepositoryScannerImpl implements InternalKieScanner {
                                                    this.kieContainer.getCreationTimestamp());
 
         artifactResolver = getResolverFor(this.kieContainer, true);
-        usedDependencies = indexAtifacts(artifactResolver);
+        usedDependencies = indexArtifacts(artifactResolver);
 
         KieScannersRegistry.register(this);
         status = Status.STOPPED;
@@ -153,7 +154,7 @@ public class KieRepositoryScannerImpl implements InternalKieScanner {
         }
 
         MemoryKieModule kieModule = new MemoryKieModule(releaseId);
-        addDependencies(kieModule, resolver, resolver.getPomDirectDependencies());
+        addDependencies(kieModule, resolver, resolver.getPomDirectDependencies( DependencyFilter.COMPILE_FILTER ));
         build(kieModule);
         return kieModule;
     }
@@ -350,27 +351,30 @@ public class KieRepositoryScannerImpl implements InternalKieScanner {
         return newArtifacts;
     }
 
-    private Map<ReleaseId, DependencyDescriptor> indexAtifacts(ArtifactResolver artifactResolver) {
+    private Map<ReleaseId, DependencyDescriptor> indexArtifacts(ArtifactResolver artifactResolver) {
         Map<ReleaseId, DependencyDescriptor> depsMap = new HashMap<ReleaseId, DependencyDescriptor>();
         for (DependencyDescriptor dep : artifactResolver.getAllDependecies()) {
-            Artifact artifact = artifactResolver.resolveArtifact(dep.getReleaseId());
-            log.debug( artifact + " resolved to  " + artifact.getFile() );
-            if (isKJar(artifact.getFile())) {
-                depsMap.put(dep.getReleaseIdWithoutVersion(), new DependencyDescriptor(artifact));
+            if ( !"test".equals(dep.getScope()) && !"provided".equals(dep.getScope()) && !"system".equals(dep.getScope()) ) {
+                Artifact artifact = artifactResolver.resolveArtifact(dep.getReleaseId());
+                log.debug( artifact + " resolved to  " + artifact.getFile() );
+                if (isKJar(artifact.getFile())) {
+                    depsMap.put(dep.getReleaseIdWithoutVersion(), new DependencyDescriptor(artifact));
+                }
+            } else {
+                log.debug("{} does not need to be resolved because in scope {}", dep, dep.getScope());
             }
         }
         return depsMap;
     }
 
     private boolean isKJar(File jar) {
-        ZipFile zipFile;
-        try {
-            zipFile = new ZipFile( jar );
+        try (ZipFile zipFile = new ZipFile( jar )) {
+            ZipEntry zipEntry = zipFile.getEntry( KieModuleModelImpl.KMODULE_JAR_PATH );
+            return zipEntry != null;
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Failed to open Zip file '" + jar.getAbsolutePath() + "'!", e);
         }
-        ZipEntry zipEntry = zipFile.getEntry( KieModuleModelImpl.KMODULE_JAR_PATH );
-        return zipEntry != null;
+
     }
     
     public synchronized KieScannerMBean getMBean() {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,14 @@ package org.drools.core.reteoo;
 
 import org.drools.core.common.InternalWorkingMemory;
 import org.drools.core.impl.InternalKnowledgeBase;
+import org.drools.core.spi.Tuple;
 import org.drools.core.util.AbstractHashTable;
 import org.drools.core.util.Entry;
 import org.drools.core.util.FastIterator;
 import org.drools.core.util.LinkedList;
 import org.drools.core.util.ReflectiveVisitor;
-import org.drools.core.util.index.RightTupleIndexHashTable;
-import org.drools.core.util.index.RightTupleList;
+import org.drools.core.util.index.TupleIndexHashTable;
+import org.drools.core.util.index.TupleList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -189,20 +190,20 @@ public class MemoryVisitor extends ReflectiveVisitor
         logger.info( indent() + node );
     }
 
-    private void checkObjectHashTable(final RightTupleMemory memory) {
-        if ( memory instanceof RightTupleList ) {
-            checkRightTupleList( (RightTupleList) memory );
-        } else if ( memory instanceof RightTupleIndexHashTable ) {
-            checkRightTupleIndexHashTable( (RightTupleIndexHashTable) memory );
+    private void checkObjectHashTable(final TupleMemory memory) {
+        if ( memory instanceof TupleList ) {
+            checkRightTupleList( (TupleList) memory );
+        } else if ( memory instanceof TupleIndexHashTable ) {
+            checkRightTupleIndexHashTable( (TupleIndexHashTable) memory );
         } else {
             throw new RuntimeException( memory.getClass() + " should not be here" );
         }
     }
 
-    private void checkRightTupleList(final RightTupleList memory) {
+    private void checkRightTupleList(final TupleList memory) {
         int count = 0;
         FastIterator rightIt = memory.fastIterator();
-        for ( RightTuple rightTuple = memory.getFirst( ); rightTuple != null; rightTuple = (RightTuple) rightIt.next( rightTuple ) ) {
+        for ( Tuple rightTuple = memory.getFirst( ); rightTuple != null; rightTuple = (Tuple) rightIt.next( rightTuple ) ) {
                     count++;
         }
 
@@ -212,17 +213,17 @@ public class MemoryVisitor extends ReflectiveVisitor
         }
     }
 
-    private void checkRightTupleIndexHashTable(final RightTupleIndexHashTable memory) {
+    private void checkRightTupleIndexHashTable(final TupleIndexHashTable memory) {
         final Entry[] entries = memory.getTable();
         int factCount = 0;
         int bucketCount = 0;
         FastIterator it = LinkedList.fastIterator;
         for ( Entry entry1 : entries ) {
             if ( entry1 != null ) {
-                RightTupleList rightTupleList = (RightTupleList) entry1;
+                TupleList rightTupleList = (TupleList) entry1;
                 while ( rightTupleList != null ) {
-                    if ( rightTupleList.first != null ) {
-                        Entry entry = rightTupleList.first;
+                    if ( rightTupleList.getFirst() != null ) {
+                        Entry entry = rightTupleList.getFirst();
                         while ( entry != null ) {
                             entry = it.next( entry );
                             factCount++;
@@ -230,7 +231,7 @@ public class MemoryVisitor extends ReflectiveVisitor
                     } else {
                         logger.info( "error : fieldIndexHashTable cannot have empty FieldIndexEntry objects" );
                     }
-                    rightTupleList = (RightTupleList) rightTupleList.getNext();
+                    rightTupleList = rightTupleList.getNext();
                     bucketCount++;
                 }
             }
@@ -253,7 +254,7 @@ public class MemoryVisitor extends ReflectiveVisitor
         }
     }
 
-    private void checkLeftTupleMemory(final LeftTupleMemory memory) {
+    private void checkLeftTupleMemory(final TupleMemory memory) {
         // @todo need to implement this correctly, as we now have indexed and none indxed tuple memories.
 //        final Entry[] entries = memory.getTable();
 //        int count = 0;

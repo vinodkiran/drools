@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package org.drools.core.common;
 import org.drools.core.factmodel.traits.TraitTypeEnum;
 import org.drools.core.reteoo.LeftTuple;
 import org.drools.core.reteoo.RightTuple;
-import org.kie.api.runtime.rule.EntryPoint;
+import org.drools.core.spi.Tuple;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
@@ -94,7 +94,7 @@ public class QueryElementFactHandle
         this.object = object;
     }    
 
-    public EntryPoint getEntryPoint() {
+    public InternalWorkingMemoryEntryPoint getEntryPoint() {
         return null;
         //throw new UnsupportedOperationException( "DisonnectedFactHandle does not support this method" );
     }
@@ -135,7 +135,7 @@ public class QueryElementFactHandle
         return true;
     }
 
-    public void setEntryPoint(EntryPoint ep) {
+    public void setEntryPoint(InternalWorkingMemoryEntryPoint ep) {
         throw new UnsupportedOperationException( "QueryElementFactHandle does not support this method" );
     }
 
@@ -215,10 +215,6 @@ public class QueryElementFactHandle
         throw new UnsupportedOperationException( "QueryElementFactHandle does not support this method" );
     }
 
-    public void addLeftTupleInPosition( LeftTuple leftTuple ) {
-        throw new UnsupportedOperationException( "QueryElementFactHandle does not support this method" );
-    }
-
     public void removeLeftTuple( LeftTuple leftTuple ) {
         throw new UnsupportedOperationException( "QueryElementFactHandle does not support this method" );
     }
@@ -239,7 +235,7 @@ public class QueryElementFactHandle
         throw new UnsupportedOperationException( "QueryElementFactHandle does not support this method" );
     }
 
-    public void addRightTupleInPosition( RightTuple rightTuple ) {
+    public void addTupleInPosition( Tuple rightTuple ) {
         throw new UnsupportedOperationException( "QueryElementFactHandle does not support this method" );
     }
 
@@ -252,4 +248,13 @@ public class QueryElementFactHandle
         throw new UnsupportedOperationException( "QueryElementFactHandle does not yet support this method" );
     }
 
+    @Override
+    public boolean isExpired() {
+        return false;
+    }
+
+    @Override
+    public boolean isPendingRemoveFromStore() {
+        return false;
+    }
 }

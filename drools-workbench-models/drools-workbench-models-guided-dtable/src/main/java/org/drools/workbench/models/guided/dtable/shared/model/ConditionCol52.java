@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 package org.drools.workbench.models.guided.dtable.shared.model;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,6 +83,17 @@ public class ConditionCol52 extends DTColumnConfig52
         }
 
         List<BaseColumnFieldDiff> result = super.diff( otherColumn );
+        result.addAll( conditionCol52SpecificDiff( otherColumn ) );
+
+        return result;
+    }
+
+    protected List<BaseColumnFieldDiff> conditionCol52SpecificDiff( BaseColumn otherColumn ) {
+        if ( otherColumn == null ) {
+            return null;
+        }
+
+        List<BaseColumnFieldDiff> result = new ArrayList<>();
         ConditionCol52 other = (ConditionCol52) otherColumn;
 
         // Field: factField.

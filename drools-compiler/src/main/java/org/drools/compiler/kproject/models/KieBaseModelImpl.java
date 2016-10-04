@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import com.thoughtworks.xstream.converters.UnmarshallingContext;
 import com.thoughtworks.xstream.io.HierarchicalStreamReader;
 import com.thoughtworks.xstream.io.HierarchicalStreamWriter;
 import org.drools.core.util.AbstractXStreamConverter;
-import org.drools.core.util.Predicate;
+import org.drools.core.util.StringUtils;
 import org.kie.api.builder.model.KieBaseModel;
 import org.kie.api.builder.model.KieModuleModel;
 import org.kie.api.builder.model.KieSessionModel;
@@ -278,15 +278,13 @@ public class KieBaseModelImpl
     }
     
     public static List<String> getFiles(java.io.File rootFolder) {
-        return recursiveListFile( rootFolder, "", new Predicate<java.io.File>() {
-            public boolean apply(java.io.File file) {
+        return recursiveListFile( rootFolder, "", file -> {
                 String fileName = file.getName();
                 return fileName.endsWith( ResourceType.DRL.getDefaultExtension() ) ||
                        fileName.endsWith( ResourceType.GDRL.getDefaultExtension() ) ||
                        fileName.endsWith( ResourceType.RDRL.getDefaultExtension() ) ||
                        fileName.endsWith( ResourceType.BPMN2.getDefaultExtension() ) ||
                        fileName.endsWith( ResourceType.TDRL.getDefaultExtension() );
-            }
         } );
     }
 
@@ -366,7 +364,10 @@ public class KieBaseModelImpl
         public Object unmarshal(HierarchicalStreamReader reader,
                                 final UnmarshallingContext context) {
             final KieBaseModelImpl kBase = new KieBaseModelImpl();
-            kBase.name = reader.getAttribute( "name" );
+
+            String kbaseName = reader.getAttribute( "name" );
+            kBase.name = kbaseName != null ? kbaseName : StringUtils.uuid();
+
             kBase.setDefault( "true".equals(reader.getAttribute( "default" )) );
 
             String eventMode = reader.getAttribute( "eventProcessingMode" );

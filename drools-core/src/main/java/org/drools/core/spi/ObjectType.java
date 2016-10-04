@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,18 @@
 
 package org.drools.core.spi;
 
-import java.io.Externalizable;
-
 import org.drools.core.base.ValueType;
+
+import java.io.Externalizable;
 
 /**
  * Semantic object type differentiator.
- *
- * @see org.kie.rule.Declaration
  */
 public interface ObjectType
     extends
     Externalizable {
+
+    boolean isAssignableFrom(Class<?> clazz);
 
     boolean isAssignableFrom(ObjectType objectType);
 

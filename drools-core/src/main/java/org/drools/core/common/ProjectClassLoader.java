@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ public class ProjectClassLoader extends ClassLoader {
     }
 
     public static class IBMClassLoader extends ProjectClassLoader {
-        private final boolean parentImplemntsFindReosources;
+        private final boolean parentImplementsFindResources;
 
         private static final Enumeration<URL> EMPTY_RESOURCE_ENUM = new Vector<URL>().elements();
 
@@ -72,14 +72,14 @@ public class ProjectClassLoader extends ClassLoader {
             try {
                 m = parent.getClass().getMethod("findResources", String.class);
             } catch (NoSuchMethodException e) { }
-            parentImplemntsFindReosources = m != null && m.getDeclaringClass() == parent.getClass();
+            parentImplementsFindResources = m != null && m.getDeclaringClass() == parent.getClass();
         }
 
         @Override
         protected Enumeration<URL> findResources(String name) throws IOException {
             // if the parent doesn't implemnt this method call getResources directly on it
             // see https://blogs.oracle.com/bhaktimehta/entry/ibm_jdk_and_classloader_getresources
-            return parentImplemntsFindReosources ? EMPTY_RESOURCE_ENUM : getParent().getResources(name);
+            return parentImplementsFindResources ? EMPTY_RESOURCE_ENUM : getParent().getResources(name);
         }
     }
 
@@ -204,6 +204,7 @@ public class ProjectClassLoader extends ClassLoader {
         }
         Class<?> clazz = typesClassLoader.defineClass(name, bytecode);
         definedTypes.put(name, new ClassBytecode(clazz, bytecode));
+        loadedClasses.put(name, clazz);
         return clazz;
     }
 
@@ -359,38 +360,53 @@ public class ProjectClassLoader extends ClassLoader {
 
         private final ProjectClassLoader projectClassLoader;
 
-        private DefaultInternalTypesClassLoader(ProjectClassLoader projectClassLoader) {
-            super(projectClassLoader.getParent());
+        private DefaultInternalTypesClassLoader( ProjectClassLoader projectClassLoader ) {
+            super( projectClassLoader.getParent() );
             this.projectClassLoader = projectClassLoader;
         }
 
-        public Class<?> defineClass(String name, byte[] bytecode) {
+        public Class<?> defineClass( String name, byte[] bytecode ) {
             int lastDot = name.lastIndexOf( '.' );
-            if (lastDot > 0) {
+            if ( lastDot > 0 ) {
                 String pkgName = name.substring( 0, lastDot );
-                if (getPackage( pkgName ) == null) {
+                if ( getPackage( pkgName ) == null ) {
                     definePackage( pkgName, "", "", "", "", "", "", null );
                 }
             }
-            return defineClass(name, bytecode, 0, bytecode.length);
+            return defineClass( name, bytecode, 0, bytecode.length );
         }
 
-        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        protected Class<?> loadClass( String name, boolean resolve ) throws ClassNotFoundException {
             try {
-                return loadType(name, resolve);
+                return loadType( name, resolve );
             } catch (ClassNotFoundException cnfe) {
-                synchronized(projectClassLoader) {
+                synchronized (projectClassLoader) {
                     try {
-                        return projectClassLoader.internalLoadClass(name, resolve);
+                        return projectClassLoader.internalLoadClass( name, resolve );
                     } catch (ClassNotFoundException cnfe2) {
-                        return projectClassLoader.tryDefineType(name, cnfe);
+                        return projectClassLoader.tryDefineType( name, cnfe );
                     }
                 }
             }
         }
 
-        public Class<?> loadType(String name, boolean resolve) throws ClassNotFoundException {
-            return super.loadClass(name, resolve);
+        public Class<?> loadType( String name, boolean resolve ) throws ClassNotFoundException {
+            return super.loadClass( name, resolve );
+        }
+
+        @Override
+        public URL getResource( String name ) {
+            return projectClassLoader.getResource( name );
+        }
+
+        @Override
+        public InputStream getResourceAsStream(String name) {
+            return projectClassLoader.getResourceAsStream( name );
+        }
+
+        @Override
+        public Enumeration<URL> getResources(String name) throws IOException {
+            return projectClassLoader.getResources( name );
         }
     }
 

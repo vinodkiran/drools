@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,9 +85,14 @@ import org.drools.core.common.DefaultFactHandle;
 import org.drools.core.common.InternalAgenda;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.impl.EnvironmentFactory;
+import org.drools.core.impl.InternalKnowledgeBase;
+import org.drools.core.io.impl.InputStreamResource;
 import org.drools.core.marshalling.impl.ClassObjectMarshallingStrategyAcceptor;
 import org.drools.core.marshalling.impl.IdentityPlaceholderResolverStrategy;
+import org.drools.core.reteoo.EntryPointNode;
 import org.drools.core.reteoo.LeftTuple;
+import org.drools.core.reteoo.ObjectSink;
+import org.drools.core.reteoo.ObjectTypeNode;
 import org.drools.core.rule.MapBackedClassLoader;
 import org.junit.Assert;
 import org.junit.Test;
@@ -104,6 +109,7 @@ import org.kie.api.event.rule.AfterMatchFiredEvent;
 import org.kie.api.event.rule.AgendaEventListener;
 import org.kie.api.event.rule.ObjectDeletedEvent;
 import org.kie.api.event.rule.RuleRuntimeEventListener;
+import org.kie.api.io.Resource;
 import org.kie.api.io.ResourceType;
 import org.kie.api.marshalling.ObjectMarshallingStrategy;
 import org.kie.api.runtime.Environment;
@@ -1462,11 +1468,11 @@ import static org.mockito.Mockito.*;
          DefaultFactHandle helloHandle = (DefaultFactHandle) ksession.insert( "hello" );
          DefaultFactHandle goodbyeHandle = (DefaultFactHandle) ksession.insert( "goodbye" );
 
-         FactHandle key = new DefaultFactHandle( helloHandle.toExternalForm() );
+         FactHandle key = DefaultFactHandle.createFromExternalFormat( helloHandle.toExternalForm() );
          assertEquals( "hello",
                        ksession.getObject( key ) );
 
-         key = new DefaultFactHandle( goodbyeHandle.toExternalForm() );
+         key = DefaultFactHandle.createFromExternalFormat( goodbyeHandle.toExternalForm() );
          assertEquals( "goodbye",
                        ksession.getObject( key ) );
      }
@@ -2350,7 +2356,8 @@ import static org.mockito.Mockito.*;
      @Test
      public void testDumpers() throws Exception {
          final DrlParser parser = new DrlParser( LanguageLevelOption.DRL5 );
-         final PackageDescr pkg = parser.parse( new InputStreamReader( getClass().getResourceAsStream( "test_Dumpers.drl" ) ) );
+         Resource resource = new InputStreamResource( getClass().getResourceAsStream( "test_Dumpers.drl" ) );
+         final PackageDescr pkg = parser.parse( resource );
 
          if ( parser.hasErrors() ) {
              for ( DroolsError error : parser.getErrors() ) {
@@ -4291,7 +4298,7 @@ import static org.mockito.Mockito.*;
                            "rule2" );
          leftTuple = handle.getFirstLeftTuple();
          assertNotNull( leftTuple );
-         assertNull( leftTuple.getLeftParentNext() );
+         assertNull( leftTuple.getHandleNext() );
      }
 
      // JBRULES-1808
@@ -9876,7 +9883,7 @@ import static org.mockito.Mockito.*;
                          "         ) or ( " +
                          "           SimpleFact( patientSpaceId == $patientSpaceIdRoot, block == 2 )\n" +
                          "         ) or (" +
-                         "           SimpleFact( patientSpaceId == $patientSpaceIdRoot, block == 3 )\n" +
+                         "           SimpleFact( patientSpaceId  == $patientSpaceIdRoot, block == 3 )\n" +
                          "         ) or (" +
                          "           SimpleFact( patientSpaceId == $patientSpaceIdRoot, block == 4 )\n" +
                          "         ) or (" +
@@ -9935,6 +9942,14 @@ import static org.mockito.Mockito.*;
          kbase.addKnowledgePackages( kpgs );
 
          kbase.removeKnowledgePackage( kpgs.iterator().next().getName() );
+
+         EntryPointNode epn = ( (InternalKnowledgeBase) kbase ).getRete().getEntryPointNodes().values().iterator().next();
+         for (ObjectTypeNode otn : epn.getObjectTypeNodes().values()) {
+             ObjectSink[] sinks = otn.getObjectSinkPropagator().getSinks();
+             if (sinks.length > 0) {
+                 fail( otn + " has sinks " + Arrays.toString( sinks ) );
+             }
+         }
      }
 
      @Test

@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 JBoss Inc
+ * Copyright 2005 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ public class MockLeftTupleSink extends LeftTupleSource
     }
 
     public Memory createMemory(final RuleBaseConfiguration config, InternalWorkingMemory wm) {
-        return new PathMemory(null);
+        return new PathMemory(null, null);
     }
 
     public void updateSink(final LeftTupleSink sink,
@@ -156,26 +156,26 @@ public class MockLeftTupleSink extends LeftTupleSource
     }
     
     public LeftTuple createLeftTuple(InternalFactHandle factHandle,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new LeftTupleImpl(factHandle, sink, leftTupleMemoryEnabled );
     }
 
     public LeftTuple createLeftTuple(final InternalFactHandle factHandle,
                                      final LeftTuple leftTuple,
-                                     final LeftTupleSink sink) {
+                                     final Sink sink) {
         return new LeftTupleImpl(factHandle,leftTuple, sink );
     }
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      PropagationContext pctx, boolean leftTupleMemoryEnabled) {
         return new LeftTupleImpl(leftTuple,sink, pctx, leftTupleMemoryEnabled );
     }
 
     public LeftTuple createLeftTuple(LeftTuple leftTuple,
                                      RightTuple rightTuple,
-                                     LeftTupleSink sink) {
+                                     Sink sink) {
         return new LeftTupleImpl(leftTuple, rightTuple, sink );
     }   
     
@@ -183,7 +183,7 @@ public class MockLeftTupleSink extends LeftTupleSource
                                      RightTuple rightTuple,
                                      LeftTuple currentLeftChild,
                                      LeftTuple currentRightChild,
-                                     LeftTupleSink sink,
+                                     Sink sink,
                                      boolean leftTupleMemoryEnabled) {
         return new LeftTupleImpl(leftTuple, rightTuple, currentLeftChild, currentRightChild, sink, leftTupleMemoryEnabled );        
     }
@@ -207,4 +207,8 @@ public class MockLeftTupleSink extends LeftTupleSource
         return null;
     }
 
+    @Override
+    protected boolean internalEquals( Object object ) {
+        return false;
+    }
 }

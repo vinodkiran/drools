@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,7 +190,7 @@ public class AccumulateNodeTest extends DroolsTestCase {
         assertTrue( "An empty matching objects list should be propagated",
                            this.accumulator.getMatchingObjects().isEmpty() );
 
-        final LeftTupleMemory memory = this.memory.getLeftTupleMemory();
+        final TupleMemory memory = this.memory.getLeftTupleMemory();
         assertTrue( memory.contains( tuple0 ) );
         assertTrue( memory.contains( tuple1 ) );
 
@@ -247,7 +247,7 @@ public class AccumulateNodeTest extends DroolsTestCase {
                              2,
                              this.accumulator.getMatchingObjects().size() );
 
-        final LeftTupleMemory memory = this.memory.getLeftTupleMemory();
+        final TupleMemory memory = this.memory.getLeftTupleMemory();
         assertTrue( memory.contains( tuple0 ) );
         assertTrue( memory.contains( tuple1 ) );
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008 JBoss Inc
+ * Copyright 2008 Red Hat, Inc. and/or its affiliates.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,15 @@ import org.drools.compiler.CommonTestMethodBase;
 import org.drools.compiler.StockTick;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.kie.api.KieBase;
 import org.kie.api.KieBaseConfiguration;
+import org.kie.api.KieServices;
 import org.kie.api.conf.EventProcessingOption;
 import org.kie.api.io.ResourceType;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.KieSessionConfiguration;
 import org.kie.api.runtime.conf.ClockTypeOption;
+import org.kie.api.runtime.conf.TimedRuleExectionOption;
 import org.kie.api.runtime.rule.EntryPoint;
 import org.kie.api.runtime.rule.FactHandle;
 import org.kie.api.runtime.rule.QueryResults;
@@ -62,24 +65,85 @@ public class MultithreadTest extends CommonTestMethodBase {
 
     @Test(timeout = 10000)
     public void testConcurrentInsertionsFewObjectsManyThreads() {
-        testConcurrentInsertions(1, 1000);
+        final String drl = "import org.drools.compiler.integrationtests.MultithreadTest.Bean\n" +
+                "\n" +
+                "rule \"R\"\n" +
+                "when\n" +
+                "    $a : Bean( seed != 1 )\n" +
+                "then\n" +
+                "end";
+        testConcurrentInsertions(drl, 1, 1000, false, false);
     }
 
     @Test(timeout = 10000)
     public void testConcurrentInsertionsManyObjectsFewThreads() {
-        testConcurrentInsertions(1000, 4);
+        final String drl = "import org.drools.compiler.integrationtests.MultithreadTest.Bean\n" +
+                "\n" +
+                "rule \"R\"\n" +
+                "when\n" +
+                "    $a : Bean( seed != 1 )\n" +
+                "then\n" +
+                "end";
+        testConcurrentInsertions(drl, 1000, 4, false, false);
     }
 
-    private void testConcurrentInsertions(final int objectCount, final int threadCount) {
-        String str = "import org.drools.compiler.integrationtests.MultithreadTest.Bean\n" +
-                     "\n" +
-                     "rule \"R\"\n" +
-                     "when\n" +
-                     "    $a : Bean( seed != 1 )\n" +
-                     "then\n" +
-                     "end";
+    @Test(timeout = 10000)
+    public void testConcurrentInsertionsNewSessionEachThreadObjectTypeNode() {
+        final String drl = "import org.drools.compiler.integrationtests.MultithreadTest.Bean\n" +
+                " query existsBeanSeed5More() \n" +
+                "     Bean( seed > 5 ) \n" +
+                " end \n" +
+                "\n" +
+                "rule \"R\"\n" +
+                "when\n" +
+                "    $a: Bean( seed != 1 )\n" +
+                "    existsBeanSeed5More() \n" +
+                "then\n" +
+                "end \n" +
+                "rule \"R2\"\n" +
+                "when\n" +
+                "    $a: Bean( seed != 1 )\n" +
+                "then\n" +
+                "end\n";
+        testConcurrentInsertions(drl, 10, 1000, true, true);
+    }
 
-        final KieSession ksession = new KieHelper().addContent(str, ResourceType.DRL).build().newKieSession();
+    @Test(timeout = 10000)
+    public void testConcurrentInsertionsNewSessionEachThread() {
+        final String drl = "import org.drools.compiler.integrationtests.MultithreadTest.Bean\n" +
+                " query existsBeanSeed5More() \n" +
+                "     Bean( seed > 5 ) \n" +
+                " end \n" +
+                "\n" +
+                "rule \"R\"\n" +
+                "when\n" +
+                "    $a: Bean( seed != 1 )\n" +
+                "    $b: Bean( seed != 2 )\n" +
+                "    existsBeanSeed5More() \n" +
+                "then\n" +
+                "end \n" +
+                "rule \"R2\"\n" +
+                "when\n" +
+                "    $a: Bean( seed != 1 )\n" +
+                "    $b: Bean( seed != 2 )\n" +
+                "then\n" +
+                "end\n" +
+                "rule \"R3\"\n" +
+                "when\n" +
+                "    $a: Bean( seed != 3 )\n" +
+                "    $b: Bean( seed != 4 )\n" +
+                "    $c: Bean( seed != 5 )\n" +
+                "    $d: Bean( seed != 6 )\n" +
+                "    $e: Bean( seed != 7 )\n" +
+                "then\n" +
+                "end";
+        testConcurrentInsertions(drl, 10, 1000, true, false);
+    }
+
+    private void testConcurrentInsertions(final String drl, final int objectCount, final int threadCount,
+            final boolean newSessionForEachThread, final boolean updateFacts) {
+
+        final KieBase kieBase = new KieHelper().addContent(drl, ResourceType.DRL).build();
 
         Executor executor = Executors.newCachedThreadPool(new ThreadFactory() {
             public Thread newThread(Runnable r) {
@@ -89,38 +153,112 @@ public class MultithreadTest extends CommonTestMethodBase {
             }
         });
 
-        CompletionService<Boolean> ecs = new ExecutorCompletionService<Boolean>(executor);
-        for (int i = 0; i < threadCount; i++) {
-            ecs.submit(new Callable<Boolean>() {
-                public Boolean call() throws Exception {
-                    try {
-                        FactHandle[] facts = new FactHandle[objectCount];
-                        for (int i = 0; i < objectCount; i++) facts[i] = ksession.insert(new Bean(i));
-                        ksession.fireAllRules();
-                        for (FactHandle fact : facts) ksession.delete(fact);
-                        ksession.fireAllRules();
-                        return true;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        return false;
-                    }
-                }
-            });
+        KieSession ksession = null;
+        Callable<Boolean>[] tasks = new Callable[threadCount];
+        if (newSessionForEachThread) {
+            for (int i = 0; i < threadCount; i++) {
+                tasks[i] = getTask( objectCount, kieBase, updateFacts );
+            }
+        } else {
+            ksession = kieBase.newKieSession();
+            for (int i = 0; i < threadCount; i++) {
+                tasks[i] = getTask( objectCount, ksession, false , updateFacts );
+            }
         }
 
-        boolean success = true;
+        CompletionService<Boolean> ecs = new ExecutorCompletionService<Boolean>(executor);
+        for (Callable<Boolean> task : tasks) {
+            ecs.submit( task );
+        }
+
+        int successCounter = 0;
         for (int i = 0; i < threadCount; i++) {
             try {
-                success = ecs.take().get() && success;
+                if ( ecs.take().get() ) {
+                    successCounter++;
+                }
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
 
-        assertTrue(success);
-        ksession.dispose();
+        assertEquals(threadCount, successCounter);
+        if (ksession != null) {
+            ksession.dispose();
+        }
     }
 
+    private Callable<Boolean> getTask( final int objectCount, final KieBase kieBase, final boolean updateFacts) {
+        return getTask(objectCount, kieBase.newKieSession(), true, updateFacts);
+    }
+
+    private Callable<Boolean> getTask(
+            final int objectCount,
+            final KieSession ksession,
+            final boolean disposeSession,
+            final boolean updateFacts) {
+        return new Callable<Boolean>() {
+            public Boolean call() throws Exception {
+                try {
+                    for (int j = 0; j < 10; j++) {
+                        FactHandle[] facts = new FactHandle[objectCount];
+                        for (int i = 0; i < objectCount; i++) {
+                            facts[i] = ksession.insert(new Bean(i));
+                        }
+                        if (updateFacts) {
+                            for (int i = 0; i < objectCount; i++) {
+                                ksession.update(facts[i], new Bean(-i));
+                            }
+                        }
+                        for (FactHandle fact : facts) {
+                            ksession.delete(fact);
+                        }
+                        ksession.fireAllRules();
+                    }
+                    return true;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return false;
+                } finally {
+                    if (disposeSession) {
+                        ksession.dispose();
+                    }
+                }
+            }
+        };
+    }
+
+    public static class Bean {
+
+        private final int seed;
+        private final String threadName;
+
+        public Bean(int seed) {
+            this.seed = seed;
+            threadName = Thread.currentThread().getName();
+        }
+
+        public int getSeed() {
+            return seed;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof Bean)) return false;
+            return seed == ((Bean)other).seed && threadName.equals( ((Bean)other).threadName );
+        }
+
+        @Override
+        public int hashCode() {
+            return 29 * seed + 31 * threadName.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return "Bean #" + seed + " created by " + threadName;
+        }
+    }
+/*/
     public static class Bean {
 
         private final int seed;
@@ -146,10 +284,10 @@ public class MultithreadTest extends CommonTestMethodBase {
 
         @Override
         public String toString() {
-            return "Bean nr. " + seed;
+            return "Bean #" + seed;
         }
     }
-
+*/
     @Test(timeout = 1000000)
     public void testSlidingTimeWindows() {
         String str = "package org.drools\n" +
@@ -637,378 +775,85 @@ public class MultithreadTest extends CommonTestMethodBase {
         }
     }
 
+    @Test(timeout = 10000)
+    public void testConcurrentFireAndDispose() throws InterruptedException {
+        // DROOLS-1103
+        String drl = "rule R no-loop timer( int: 1s )\n" +
+                     "when\n" +
+                     "    String()\n" +
+                     "then\n" +
+                     "end";
 
-    // FIXME
-//
-//    public void testRuleBaseConcurrentCompilation() {
-//        final int THREAD_COUNT = 30;
-//        try {
-//            boolean success = true;
-//            final PackageBuilder builder = new PackageBuilder();
-//            builder.addPackageFromDrl( new InputStreamReader( getClass().getResourceAsStream( "test_MultithreadRulebaseSharing.drl" ) ) );
-//            RuleBase ruleBase = RuleBaseFactory.newRuleBase();
-//            ruleBase.addPackage( builder.getPackage() );
-//            ruleBase = SerializationHelper.serializeObject( ruleBase );
-//            final Thread[] t = new Thread[THREAD_COUNT];
-//            final RulebaseRunner[] r = new RulebaseRunner[THREAD_COUNT];
-//            for ( int i = 0; i < t.length; i++ ) {
-//                r[i] = new RulebaseRunner( i,
-//                                           ruleBase );
-//                t[i] = new Thread( r[i],
-//                                   "thread-" + i );
-//                t[i].start();
-//            }
-//            for ( int i = 0; i < t.length; i++ ) {
-//                t[i].join();
-//                if ( r[i].getStatus() == RulebaseRunner.Status.FAIL ) {
-//                    success = false;
-//                }
-//            }
-//            if ( !success ) {
-//                fail( "Multithread test failed. Look at the stack traces for details. " );
-//            }
-//        } catch ( Exception e ) {
-//            e.printStackTrace();
-//            fail( "Should not raise any exception: " + e.getMessage() );
-//        }
-//    }
-//
-//    public static class RulebaseRunner
-//        implements
-//        Runnable {
-//
-//        private static final int ITERATIONS = 300;
-//        private final int        id;
-//        private final RuleBase   rulebase;
-//        private Status           status;
-//
-//        public RulebaseRunner(final int id,
-//                              final RuleBase rulebase) {
-//            this.id = id;
-//            this.rulebase = rulebase;
-//            this.status = Status.SUCCESS;
-//        }
-//
-//        public void run() {
-//            try {
-//                StatefulSession session2 = this.rulebase.newStatefulSession();
-//
-//                for ( int k = 0; k < ITERATIONS; k++ ) {
-//                    GrandParent gp = new GrandParent( "bob" );
-//                    Parent parent = new Parent( "mark" );
-//                    parent.setGrandParent( gp );
-//
-//                    Child child = new Child( "mike" );
-//                    child.setParent( parent );
-//
-//                    session2.insert( gp );
-//                    session2.insert( parent );
-//                    session2.insert( child );
-//                }
-//
-//                session2.fireAllRules();
-//                session2.dispose();
-//
-//            } catch ( Exception e ) {
-//                this.status = Status.FAIL;
-//                System.out.println( Thread.currentThread().getName() + " failed: " + e.getMessage() );
-//                e.printStackTrace();
-//            }
-//        }
-//
-//        public static enum Status {
-//            SUCCESS, FAIL
-//        }
-//
-//        /**
-//         * @return the id
-//         */
-//        public int getId() {
-//            return id;
-//        }
-//
-//        /**
-//         * @return the status
-//         */
-//        public Status getStatus() {
-//            return status;
-//        }
-//
-//    }
-//
-//    public void testExpectedFires() {
-//        try {
-//            final PackageBuilder packageBuilder = new PackageBuilder();
-//            packageBuilder.addPackageFromDrl( new InputStreamReader( getClass().getResourceAsStream( "test_MultithreadFiringCheck.drl" ) ) );
-//            final RuleBase ruleBase = RuleBaseFactory.newRuleBase();
-//            ruleBase.addPackage( packageBuilder.getPackage() );
-//            final Queue errorList = new ConcurrentLinkedQueue();
-//            final Thread t[] = new Thread[50];
-//            for ( int i = 0; i < t.length; i++ ) {
-//                final int count = i;
-//                t[i] = new Thread( new Runnable() {
-//                    public void run() {
-//                        try {
-//                            final int iterations = count * 15 + 3000;
-//                            final List results = new ArrayList();
-//                            final StatefulSession session2 = ruleBase.newStatefulSession();
-//                            session2.setGlobal( "results",
-//                                                results );
-//                            session2.insert( new Integer( -1 ) );
-//                            for ( int k = 0; k < iterations; k++ ) {
-//                                session2.insert( new Integer( k ) );
-//                                if ( k + 1 != session2.getAgenda().agendaSize() ) {
-//                                    errorList.add( "THREAD-" + count + " ERROR: expected agenda size=" + (k + 1) + " but was " + session2.getAgenda().agendaSize() );
-//                                }
-//                            }
-//                            session2.fireAllRules();
-//                            session2.dispose();
-//                            if ( results.size() != iterations ) {
-//                                errorList.add( "THREAD-" + count + " ERROR: expected fire count=" + iterations + " but was " + results.size() );
-//                            }
-//                        } catch ( Exception e ) {
-//                            errorList.add( "THREAD-" + count + " EXCEPTION: " + e.getMessage() );
-//                            e.printStackTrace();
-//                        }
-//                    }
-//                } );
-//                t[i].start();
-//            }
-//            for ( int i = 0; i < t.length; i++ ) {
-//                t[i].join();
-//            }
-//            assertTrue( "Errors during execution: " + errorList.toString(),
-//                        errorList.isEmpty() );
-//        } catch ( Exception e ) {
-//            e.printStackTrace();
-//            fail( "No exception should have been raised: " + e.getMessage() );
-//        }
-//    }
-//
-//    public void testMultithreadDateStringConstraints() {
-//        try {
-//            final int THREAD_COUNT = 10;
-//            final PackageBuilder packageBuilder = new PackageBuilder();
-//            packageBuilder.addPackageFromDrl( new InputStreamReader( getClass().getResourceAsStream( "test_MultithreadDateStringConstraints.drl" ) ) );
-//            final RuleBase ruleBase = RuleBaseFactory.newRuleBase();
-//            ruleBase.addPackage( packageBuilder.getPackage() );
-//            final Vector errors = new Vector();
-//
-//            final Thread t[] = new Thread[THREAD_COUNT];
-//            for ( int j = 0; j < 10; j++ ) {
-//                for ( int i = 0; i < t.length; i++ ) {
-//                    t[i] = new Thread() {
-//                        public void run() {
-//                            try {
-//                                final int ITERATIONS = 300;
-//                                StatefulSession session = ruleBase.newStatefulSession();
-//                                List results = new ArrayList();
-//                                session.setGlobal( "results",
-//                                                   results );
-//                                for ( int k = 0; k < ITERATIONS; k++ ) {
-//                                    session.insert( new Order() );
-//                                }
-//                                session.fireAllRules();
-//                                session.dispose();
-//                                if ( results.size() != ITERATIONS ) {
-//                                    errors.add( "Rules did not fired correctly. Expected: " + ITERATIONS + ". Actual: " + results.size() );
-//                                }
-//                            } catch ( Exception ex ) {
-//                                ex.printStackTrace();
-//                                errors.add( ex );
-//                            }
-//                        }
-//
-//                    };
-//                    t[i].start();
-//                }
-//                for ( int i = 0; i < t.length; i++ ) {
-//                    t[i].join();
-//                }
-//            }
-//            if ( !errors.isEmpty() ) {
-//                fail( " Errors occured during execution " );
-//            }
-//        } catch ( Exception e ) {
-//            e.printStackTrace();
-//            fail( "Should not raise exception" );
-//        }
-//    }
-//
-//    class Runner
-//        implements
-//        Runnable {
-//        private final long             TIME_SPAN;
-//        private final StatelessSession session;
-//        private final AtomicInteger    count;
-//
-//        public Runner(long BASE_TIME,
-//                      StatelessSession session,
-//                      final AtomicInteger count) {
-//            this.TIME_SPAN = BASE_TIME;
-//            this.session = session;
-//            this.count = count;
-//        }
-//
-//        public void run() {
-//            //System.out.println( Thread.currentThread().getName() + " starting..." );
-//            try {
-//                count.incrementAndGet();
-//                long time = System.currentTimeMillis();
-//                while ( (System.currentTimeMillis() - time) < TIME_SPAN ) {
-//                    //System.out.println( Thread.currentThread().getName() + ": added package at " + (System.currentTimeMillis() - time) );
-//                    for ( int j = 0; j < 100; j++ ) {
-//                        session.execute( getFacts() );
-//                    }
-//                    //System.out.println( Thread.currentThread().getName() + ": executed rules at " + (System.currentTimeMillis() - time) );
-//                }
-//            } catch ( Exception ex ) {
-//                ex.printStackTrace();
-//            }
-//            if ( count.decrementAndGet() == 0 ) {
-//                synchronized ( MultithreadTest.this ) {
-//                    MultithreadTest.this.notifyAll();
-//                }
-//            }
-//            //System.out.println( Thread.currentThread().getName() + " exiting..." );
-//        }
-//
-//        private Cheese[] getFacts() {
-//            final int SIZE = 100;
-//            Cheese[] facts = new Cheese[SIZE];
-//
-//            for ( int i = 0; i < facts.length; i++ ) {
-//                facts[i] = new Cheese();
-//                facts[i].setPrice( i );
-//                facts[i].setOldPrice( i );
-//            }
-//            return facts;
-//        }
-//    }
-//
-//    public void testSharedPackagesThreadDeadLock() throws Exception {
-//        final int THREADS = Integer.parseInt( System.getProperty( "test.threads",
-//                                                                  "10" ) );
-//        final long BASE_TIME = Integer.parseInt( System.getProperty( "test.time",
-//                                                                     "15" ) ) * 1000;
-//
-//        final AtomicInteger count = new AtomicInteger( 0 );
-//
-//        final Package[] pkgs = buildPackages();
-//        for ( int i = 0; i < THREADS; i++ ) {
-//            RuleBase ruleBase = createRuleBase( pkgs );
-//            StatelessSession session = createSession( ruleBase );
-//            new Thread( new Runner( BASE_TIME,
-//                                    session,
-//                                    count ) ).start();
-//        }
-//        synchronized ( this ) {
-//            wait();
-//        }
-//    }
-//
-//    private RuleBase createRuleBase(Package[] pkgs) {
-//        RuleBase ruleBase = RuleBaseFactory.newRuleBase();
-//        for ( Package pkg : pkgs ) {
-//            ruleBase.addPackage( pkg );
-//        }
-//        return ruleBase;
-//    }
-//
-//    private StatelessSession createSession(RuleBase ruleBase) {
-//        StatelessSession session = ruleBase.newStatelessSession();
-//        return session;
-//    }
-//
-//    private Package[] buildPackages() throws Exception {
-//        final String KEY = "REPLACE";
-//        final int SIZE = 100;
-//        final Package[] pkgs = new Package[SIZE];
-//        final String DRL = "package org.drools\n" + "    no-loop true\n" + "    dialect \"java\"\n" + "rule \"" + KEY + "\"\n" + "salience 1\n" + "when\n" + "    $fact:Cheese(price == " + KEY + ", oldPrice not in (11,5))\n" + // thread-lock
-//                           "then\n" + "    //$fact.excludeProduct(" + KEY + ", 1, null, null);\n" + "end\n";
-//        System.out.print( "Building " + pkgs.length + " packages" );
-//        for ( int i = 0; i < pkgs.length; i++ ) {
-//            pkgs[i] = getPackage( DRL.replaceAll( KEY,
-//                                                  Integer.toString( i ) ) );
-//            System.out.print( "." );
-//        }
-//        System.out.println();
-//        return pkgs;
-//    }
-//
-//    private static Package getPackage(String drl) throws Exception {
-//        PackageBuilder pkgBuilder = new PackageBuilder();
-//        pkgBuilder.addPackageFromDrl( new StringReader( drl ) );
-//        if ( pkgBuilder.hasErrors() ) {
-//            StringBuilder sb = new StringBuilder();
-//            for ( Object obj : pkgBuilder.getErrors() ) {
-//                if ( sb.length() > 0 ) {
-//                    sb.append( '\n' );
-//                }
-//                sb.append( obj );
-//            }
-//            throw new DroolsParserException( sb.toString() );
-//        }
-//        return pkgBuilder.getPackage();
-//    }
-//
-//    public void testEventExpiration() {
-//        String rule =
-//            "package org.drools\n" +
-//            "declare StockTick @role(event) @expires(0s) end\n" +
-//            "rule test no-loop true\n" +
-//            "when\n" +
-//            "   $f : StockTick() from entry-point EntryPoint\n" +
-//            "then\n" +
-//            "   //System.out.println($f);\n" +
-//            "end";
-//
-//        final StatefulKnowledgeSession session;
-//        final WorkingMemoryEntryPoint entryPoint;
-//
-//        KnowledgeBaseConfiguration kbaseConf = KnowledgeBaseFactory
-//            .newKnowledgeBaseConfiguration();
-//        kbaseConf.setOption(EventProcessingOption.STREAM);
-//
-//        KnowledgeBuilder builder = KnowledgeBuilderFactory
-//            .newKnowledgeBuilder();
-//
-//        builder.add(ResourceFactory.newReaderResource(new StringReader(rule)),
-//            ResourceType.DRL);
-//
-//        if (builder.hasErrors()) {
-//            throw new RuntimeException(builder.getErrors().toString());
-//        }
-//
-//        final KnowledgeBase knowledgeBase = KnowledgeBaseFactory
-//            .newKnowledgeBase(kbaseConf);
-//
-//        knowledgeBase.addKnowledgePackages(builder.getKnowledgePackages());
-//
-//        session = knowledgeBase.newStatefulKnowledgeSession();
-//        WorkingMemoryEventListener wmel = Mockito.mock( WorkingMemoryEventListener.class );
-//        session.addEventListener( wmel );
-//
-//        entryPoint = session
-//            .getWorkingMemoryEntryPoint("EntryPoint");
-//
-//        new Thread(new Runnable() {
-//            public void run() {
-//                session.fireUntilHalt();
-//            }
-//        }).start();
-//
-//        for (int x = 0; x < 10000; x++) {
-//            entryPoint.insert(new StockTick(x, "RHT", 10, 10+x));
-//            Thread.yield();
-//        }
-//
-//        session.halt();
-//        session.fireAllRules();
-//
-//        // facts are being expired
-//        verify( wmel, atLeastOnce() ).objectRetracted( any( ObjectRetractedEvent.class ) );
-//    }
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSessionConfiguration ksconf = KieServices.Factory.get().newKieSessionConfiguration();
+        ksconf.setOption( TimedRuleExectionOption.YES );
+        final KieSession ksession = kbase.newKieSession(ksconf, null);
 
+        new Thread() {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException _e) {
+                }
+                ksession.dispose();
+            }
+        }.start();
 
+        try {
+            int i = 0;
+            while (true) {
+                ksession.insert("" + i++);
+                ksession.fireAllRules();
+            }
+        } catch (IllegalStateException e) {
+            // java.lang.IllegalStateException: Illegal method call. This session was previously disposed.
+            // ignore and exit
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            e.printStackTrace();
+            fail( "java.util.concurrent.RejectedExecutionException should not happen" );
+        }
+    }
+
+    @Test(timeout = 10000)
+    public void testFireUntilHaltAndDispose() throws InterruptedException {
+        // DROOLS-1103
+        String drl = "rule R no-loop timer( int: 1s )\n" +
+                     "when\n" +
+                     "    String()\n" +
+                     "then\n" +
+                     "end";
+
+        KieHelper helper = new KieHelper();
+        helper.addContent( drl, ResourceType.DRL );
+        KieBase kbase = helper.build( EventProcessingOption.STREAM );
+        KieSessionConfiguration ksconf = KieServices.Factory.get().newKieSessionConfiguration();
+        ksconf.setOption( TimedRuleExectionOption.YES );
+        final KieSession ksession = kbase.newKieSession(ksconf, null);
+
+        new Thread() {
+            @Override
+            public void run() {
+                ksession.fireUntilHalt();
+            }
+        }.start();
+
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            // do nothing
+        }
+
+        ksession.insert("xxx");
+
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            // do nothing
+        }
+
+        ksession.dispose();
+    }
 }

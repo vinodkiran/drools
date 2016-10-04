@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,35 +16,39 @@
 
 package org.drools.core.command.runtime.rule;
 
+import org.drools.core.command.impl.GenericCommand;
+import org.drools.core.command.impl.KnowledgeCommandContext;
+import org.drools.core.common.DisconnectedFactHandle;
+import org.kie.api.runtime.KieSession;
+import org.kie.api.runtime.rule.EntryPoint;
+import org.kie.api.runtime.rule.FactHandle;
+import org.kie.internal.command.Context;
+
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlSchemaType;
-
-import org.drools.core.command.impl.GenericCommand;
-import org.drools.core.command.impl.KnowledgeCommandContext;
-import org.drools.core.common.DisconnectedFactHandle;
-import org.kie.internal.command.Context;
-import org.kie.api.runtime.KieSession;
-import org.kie.api.runtime.rule.FactHandle;
+import java.util.Arrays;
 
 @XmlRootElement(name="update-command")
-@XmlAccessorType(XmlAccessType.FIELD)
+@XmlAccessorType(XmlAccessType.NONE)
 public class UpdateCommand implements GenericCommand<Void> {
 
     private static final long serialVersionUID = 3255044102543531497L;
-    
-    @XmlElement
+
     private DisconnectedFactHandle handle;
-    
+
     @XmlElement
     private Object object;
-   
+
     @XmlElement
     @XmlSchemaType(name="string")
     private String entryPoint = "DEFAULT";
-    
+
+    @XmlElement
+    private String[] modifiedProperties;
+
     public UpdateCommand() {
     }
 
@@ -54,11 +58,11 @@ public class UpdateCommand implements GenericCommand<Void> {
         this.object = object;
     }
 
-    public Void execute(Context context) {
-        KieSession ksession = ((KnowledgeCommandContext) context).getKieSession();
-        
-        ksession.getEntryPoint( handle.getEntryPointId() ).update( handle, object );
-        return null;
+    public UpdateCommand(FactHandle handle,
+                         Object object,
+                         String[] modifiedProperties) {
+        this( handle, object );
+        this.modifiedProperties = modifiedProperties;
     }
 
     public String getEntryPoint() {
@@ -72,15 +76,36 @@ public class UpdateCommand implements GenericCommand<Void> {
         this.entryPoint = entryPoint;
     }
 
-    public String toString() {
-        return "session.update( " + handle + ", " + object + " );";
-    }
-
-    public Object getObject() { 
+    public Object getObject() {
         return object;
     }
-    
-    public DisconnectedFactHandle getHandle() { 
+
+    public DisconnectedFactHandle getHandle() {
         return this.handle;
+    }
+
+    @XmlElement(name="fact-handle", required=true)
+    public void setFactHandleFromString(String factHandleId) {
+        handle = new DisconnectedFactHandle(factHandleId);
+    }
+
+    public String getFactHandleFromString() {
+        return handle.toExternalForm();
+    }
+
+    public Void execute(Context context) {
+        KieSession ksession = ((KnowledgeCommandContext) context).getKieSession();
+        EntryPoint ep = ksession.getEntryPoint( handle.getEntryPointId() );
+        if (modifiedProperties != null) {
+            ep.update( handle, object, modifiedProperties );
+        } else {
+            ep.update( handle, object );
+        }
+        return null;
+    }
+
+    public String toString() {
+        return "session.update( " + handle + ", " + object +
+               (modifiedProperties != null ? ", " + Arrays.toString( modifiedProperties ) : "") + " );";
     }
 }

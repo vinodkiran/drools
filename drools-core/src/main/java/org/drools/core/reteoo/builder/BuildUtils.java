@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,9 +60,6 @@ public class BuildUtils {
 
     /**
      * Adds the given builder for the given target to the builders map
-     *
-     * @param target
-     * @param builder
      */
     public void addBuilder(final Class< ? > target,
                            final ReteooComponentBuilder builder) {
@@ -72,9 +69,6 @@ public class BuildUtils {
 
     /**
      * Returns a builder for the given target from the builders map
-     *
-     * @param target
-     * @return returns null if not found
      */
     public ReteooComponentBuilder getBuilderFor(final RuleConditionElement target) {
         return this.componentBuilders.get( target.getClass() );
@@ -96,8 +90,7 @@ public class BuildUtils {
      * @return the actual attached node that may be the one given as parameter
      *         or eventually one that was already in the cache if sharing is enabled
      */
-    public BaseNode attachNode(final BuildContext context,
-                               final BaseNode candidate) {
+    public <T extends BaseNode> T attachNode(BuildContext context, T candidate) {
         BaseNode node = null;
         RuleBasePartitionId partition = null;
         if ( candidate.getType() == NodeTypeEnums.EntryPointNode ) {
@@ -124,7 +117,7 @@ public class BuildUtils {
             if ( (context.getTupleSource() != null) && NodeTypeEnums.isLeftTupleSink( candidate ) ) {
                 node = context.getTupleSource().getSinkPropagator().getMatchingNode( candidate );
             } else if ( (context.getObjectSource() != null) && NodeTypeEnums.isObjectSink( candidate ) ) {
-                node = context.getObjectSource().getSinkPropagator().getMatchingNode( candidate );
+                node = context.getObjectSource().getObjectSinkPropagator().getMatchingNode( candidate );
             } else {
                 throw new RuntimeException( "This is a bug on node sharing verification. Please report to development team." );
             }
@@ -155,8 +148,8 @@ public class BuildUtils {
             // undo previous id assignment
             context.releaseId( candidate.getId() );
         }
-        node.addAssociation( context.getRule(), context.peekRuleComponent() );
-        return node;
+        node.addAssociation( context, context.getRule() );
+        return (T)node;
     }
 
     private void mergeNodes(BaseNode node, BaseNode duplicate) {
@@ -178,10 +171,6 @@ public class BuildUtils {
 
     /**
      * Utility function to check if sharing is enabled for nodes of the given class
-     *
-     * @param context
-     * @param node
-     * @return
      */
     private boolean isSharingEnabledForNode(final BuildContext context,
                                             final BaseNode node) {
@@ -198,8 +187,6 @@ public class BuildUtils {
      *
      * @param context the current build context
      * @param list the list of constraints
-     *
-     * @return
      */
     public BetaConstraints createBetaNodeConstraint(final BuildContext context,
                                                     final List<BetaNodeFieldConstraint> list,

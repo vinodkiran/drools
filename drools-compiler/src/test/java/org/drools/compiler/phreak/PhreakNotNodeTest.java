@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,6 @@ import org.drools.core.reteoo.SegmentMemory;
 import org.drools.core.reteoo.builder.BuildContext;
 import org.drools.core.rule.MVELDialectRuntimeData;
 import org.junit.Test;
-
-import java.beans.IntrospectionException;
 
 import static org.drools.compiler.phreak.A.a;
 import static org.drools.compiler.phreak.B.b;
@@ -90,7 +88,7 @@ public class PhreakNotNodeTest {
     B b4 = b( 4 );
 
     @Test
-    public void test1() throws IntrospectionException {
+    public void test1() {
         setupNotNode("!=");
 
         // @formatter:off
@@ -105,7 +103,7 @@ public class PhreakNotNodeTest {
         test().left().delete( a2 )
               .right().insert( b1 )
                       
-              .result().delete( a2, a0 )
+              .result().delete( )
                        .left( a1 )
                        .right( b1 )
          .run().getActualResultLeftTuples().resetAll();
@@ -113,7 +111,7 @@ public class PhreakNotNodeTest {
     }
 
     @Test
-    public void test2() throws IntrospectionException {
+    public void test2() {
         setupNotNode("<");
 
         // @formatter:off
@@ -125,7 +123,7 @@ public class PhreakNotNodeTest {
 
         test().right().insert( b1 )
 
-              .result().delete( a2 )
+              .result().delete( )
                        .left( a0, a1 )
                        .right( b1 )
               .run().getActualResultLeftTuples().resetAll();

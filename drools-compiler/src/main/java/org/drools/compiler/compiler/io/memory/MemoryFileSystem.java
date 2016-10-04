@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Enumeration;
@@ -53,20 +54,24 @@ public class MemoryFileSystem
     implements
     FileSystem,
     ResourceReader,
+    Serializable,
     ResourceStore {
 
     private static final Logger log = LoggerFactory.getLogger( MemoryFileSystem.class );
 
-    private MemoryFolder               folder;
+    private final MemoryFolder               folder;
 
-    private Map<String, Set<Resource>> folders;
+    private final Map<String, Set<Resource>> folders;
 
-    private Map<String, byte[]>        fileContents;
+    private final Map<String, Folder>        folderMap;
 
-    private Set<String>                modifiedFilesSinceLastMark;
+    private final Map<String, byte[]>        fileContents;
+
+    private Set<String>                      modifiedFilesSinceLastMark;
 
     public MemoryFileSystem() {
         folders = new HashMap<String, Set<Resource>>();
+        folderMap = new HashMap<String, Folder>();
         fileContents = new HashMap<String, byte[]>();
 
         folder = new MemoryFolder( this,
@@ -108,17 +113,19 @@ public class MemoryFileSystem
                                    path,
                                    folder );
         }
-
     }
 
     public Folder getFolder(Path path) {
-        return new MemoryFolder( this,
-                                 path.toPortableString() );
+        return getFolder( path.toPortableString() );
     }
 
     public Folder getFolder(String path) {
-        return new MemoryFolder( this,
-                                 path );
+        Folder folder = folderMap.get(path);
+        if (folder == null) {
+            folder = new MemoryFolder( this, path );
+            folderMap.put( path, folder );
+        }
+        return folder;
     }
 
     public Set< ? extends Resource> getMembers(Folder folder) {
@@ -162,11 +169,17 @@ public class MemoryFileSystem
     }
 
     public boolean existsFolder(String path) {
-        return folders.get( path ) != null;
+        if (path == null) {
+            throw new NullPointerException("Folder path can not be null!");
+        }
+        return folders.get(MemoryFolder.trimLeadingAndTrailing(path)) != null;
     }
 
     public boolean existsFile(String path) {
-        return fileContents.containsKey( MemoryFolder.trimLeadingAndTrailing( path ) );
+        if (path == null) {
+            throw new NullPointerException("File path can not be null!");
+        }
+        return fileContents.containsKey(MemoryFolder.trimLeadingAndTrailing(path));
     }
 
     public void createFolder(MemoryFolder folder) {                
@@ -356,6 +369,11 @@ public class MemoryFileSystem
     public void write(String pResourceName,
                       byte[] pResourceData,
                       boolean createFolder) {
+        if (pResourceData.length == 0 && pResourceName.endsWith( "/" )) {
+            // avoid to create files for empty folders
+            return;
+        }
+
         MemoryFile memoryFile = (MemoryFile) getFile( pResourceName );
         if ( createFolder ) {
             String folderPath = memoryFile.getFolder().getPath().toPortableString();

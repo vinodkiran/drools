@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,15 +103,29 @@ public class DefaultWorkItemManager implements WorkItemManager, Externalizable {
 
     public void retryWorkItem(long workItemId) {
     	WorkItem workItem = workItems.get(workItemId);
-    	if (workItem != null) {
+    	retryWorkItem(workItem);
+    }
+
+    public void retryWorkItemWithParams(long workItemId,Map<String,Object> map) {
+        WorkItem workItem = workItems.get(workItemId);
+        
+        if ( workItem != null ) {
+            workItem.setParameters( map );
+            
+            retryWorkItem( workItem );
+        }
+    }
+    
+    private void retryWorkItem(WorkItem workItem) {
+        if (workItem != null) {
             WorkItemHandler handler = this.workItemHandlers.get(workItem.getName());
             if (handler != null) {
                 handler.executeWorkItem(workItem, this);
             } else throw new WorkItemHandlerNotFoundException( "Could not find work item handler for " + workItem.getName(),
                                                         workItem.getName() );
-    	}
+        }
     }
-
+    
     public Set<WorkItem> getWorkItems() {
         return new HashSet<WorkItem>(workItems.values());
     }
@@ -175,5 +189,14 @@ public class DefaultWorkItemManager implements WorkItemManager, Externalizable {
             }
         }
     }
-
+    
+    @Override
+    public void retryWorkItem( Long workItemID, Map<String, Object> params ) {
+       if(params==null || params.isEmpty()){
+           retryWorkItem(workItemID);
+       }else{
+           this.retryWorkItemWithParams( workItemID, params );
+       }
+        
+    }
 }

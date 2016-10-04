@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,9 @@ import org.drools.core.common.ActivationsFilter;
 import org.drools.core.common.InternalAgendaGroup;
 import org.drools.core.common.InternalWorkingMemory;
 import org.drools.core.common.Memory;
-import org.drools.core.common.NetworkNode;
 import org.drools.core.definitions.rule.impl.RuleImpl;
 import org.drools.core.phreak.RuleAgendaItem;
 import org.drools.core.util.AbstractBaseLinkedListNode;
-import org.drools.core.util.AtomicBitwiseLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,36 +33,46 @@ public class PathMemory extends AbstractBaseLinkedListNode<Memory>
     protected static final Logger log = LoggerFactory.getLogger(PathMemory.class);
     protected static final boolean isLogTraceEnabled = log.isTraceEnabled();
 
-    private          AtomicBitwiseLong linkedSegmentMask;
+    private          long              linkedSegmentMask;
     private          long              allLinkedMaskTest;
-    private          NetworkNode       networkNode;
-    private volatile RuleAgendaItem    agendaItem;
+    private final    PathEndNode       pathEndNode;
+    private          RuleAgendaItem    agendaItem;
     private          SegmentMemory[]   segmentMemories;
     private          SegmentMemory     segmentMemory;
 
-    public PathMemory(NetworkNode networkNode) {
-        this.networkNode = networkNode;
-        this.linkedSegmentMask = new AtomicBitwiseLong();
+    public  final    boolean           dataDriven;
+
+    public PathMemory(PathEndNode pathEndNode, InternalWorkingMemory wm) {
+        this.pathEndNode = pathEndNode;
+        this.linkedSegmentMask = 0L;
+        this.dataDriven = initDataDriven( wm );
     }
 
-    public NetworkNode getNetworkNode() {
-        return networkNode;
+    protected boolean initDataDriven( InternalWorkingMemory wm ) {
+        return isRuleDataDriven( wm, getRule() );
+    }
+
+    protected boolean isRuleDataDriven( InternalWorkingMemory wm, RuleImpl rule ) {
+        return rule != null &&
+               ( rule.isDataDriven() ||
+                 ( wm != null &&
+                   wm.getSessionConfiguration().getForceEagerActivationFilter().accept(rule) ));
+    }
+
+    public PathEndNode getPathEndNode() {
+        return pathEndNode;
     }
 
     public RuleImpl getRule() {
-        return networkNode instanceof TerminalNode ? ((TerminalNode) networkNode).getRule() : null;
+        return pathEndNode instanceof TerminalNode ? ((TerminalNode) pathEndNode).getRule() : null;
     }
 
     public RuleAgendaItem getRuleAgendaItem() {
         return agendaItem;
     }
 
-    public void setlinkedSegmentMask(long mask) {
-        linkedSegmentMask.set( mask );
-    }
-
     public long getLinkedSegmentMask() {
-        return linkedSegmentMask.get();
+        return linkedSegmentMask;
     }
 
     public long getAllLinkedMaskTest() {
@@ -76,15 +84,15 @@ public class PathMemory extends AbstractBaseLinkedListNode<Memory>
     }
 
     public void linkNodeWithoutRuleNotify(long mask) {
-        linkedSegmentMask.getAndBitwiseOr( mask );
+        linkedSegmentMask |= mask;
     }
 
     public void linkSegment(long mask,
                             InternalWorkingMemory wm) {
-        linkedSegmentMask.getAndBitwiseOr( mask );
+        linkedSegmentMask |= mask;
         if (isLogTraceEnabled) {
-            if (NodeTypeEnums.isTerminalNode(getNetworkNode())) {
-                TerminalNode rtn = (TerminalNode) getNetworkNode();
+            if (NodeTypeEnums.isTerminalNode(getPathEndNode())) {
+                TerminalNode rtn = (TerminalNode) getPathEndNode();
                 log.trace("  LinkSegment smask={} rmask={} name={}", mask, linkedSegmentMask, rtn.getRule().getName());
             } else {
                 log.trace("  LinkSegment smask={} rmask={} name={}", mask, "RiaNode");
@@ -101,7 +109,7 @@ public class PathMemory extends AbstractBaseLinkedListNode<Memory>
     }
 
     private TerminalNode ensureAgendaItemCreated(InternalWorkingMemory wm) {
-        TerminalNode rtn = (TerminalNode) getNetworkNode();
+        TerminalNode rtn = (TerminalNode) getPathEndNode();
         if (agendaItem == null) {
             int salience = ( rtn.getRule().getSalience() instanceof MVELSalienceExpression)
                            ? 0
@@ -126,7 +134,14 @@ public class PathMemory extends AbstractBaseLinkedListNode<Memory>
             log.trace("    UnlinkRule name={}", rtn.getRule().getName());
         }
 
-        queueRuleAgendaItem(wm);
+        agendaItem.getRuleExecutor().setDirty(true);
+        if ( !agendaItem.isQueued() ) {
+            if ( isLogTraceEnabled ) {
+                log.trace("Queue RuleAgendaItem {}", agendaItem);
+            }
+            InternalAgendaGroup ag = agendaItem.getAgendaGroup();
+            ag.add( agendaItem );
+        }
     }
 
     public void queueRuleAgendaItem(InternalWorkingMemory wm) {
@@ -156,7 +171,7 @@ public class PathMemory extends AbstractBaseLinkedListNode<Memory>
     public void unlinkedSegment(long mask,
                                 InternalWorkingMemory wm) {
         boolean linkedRule =  isRuleLinked();
-        linkedSegmentMask.getAndBitwiseXor( mask );
+        linkedSegmentMask ^= mask;
         if (isLogTraceEnabled) {
             log.trace("  UnlinkSegment smask={} rmask={} name={}", mask, linkedSegmentMask, this);
         }
@@ -166,15 +181,27 @@ public class PathMemory extends AbstractBaseLinkedListNode<Memory>
     }
 
     public boolean isRuleLinked() {
-        return (linkedSegmentMask.get() & allLinkedMaskTest) == allLinkedMaskTest;
+        return (linkedSegmentMask & allLinkedMaskTest) == allLinkedMaskTest;
+    }
+
+    public boolean isDataDriven() {
+        return dataDriven;
     }
 
     public short getNodeType() {
         return NodeTypeEnums.RuleTerminalNode;
     }
 
+    public boolean isInitialized() {
+        return agendaItem != null && segmentMemories[0] != null;
+    }
+
     public SegmentMemory[] getSegmentMemories() {
         return segmentMemories;
+    }
+
+    public void setSegmentMemory(int index, SegmentMemory sm) {
+        this.segmentMemories[index] = sm;
     }
 
     public void setSegmentMemories(SegmentMemory[] segmentMemories) {
@@ -194,6 +221,6 @@ public class PathMemory extends AbstractBaseLinkedListNode<Memory>
     }
 
     public void reset() {
-        this.linkedSegmentMask.set(0);
+        this.linkedSegmentMask = 0L;
     }
 }

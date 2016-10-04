@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package org.drools.core.process.instance;
 
+import java.util.Map;
 import java.util.Set;
 
 public interface WorkItemManager extends org.kie.api.runtime.process.WorkItemManager {
@@ -37,5 +38,7 @@ public interface WorkItemManager extends org.kie.api.runtime.process.WorkItemMan
     public void signalEvent(String type, Object event, long processInstanceId);
 
     void dispose();
+    
+    void retryWorkItem( Long workItemID, Map<String, Object> params ) ;
 
 }

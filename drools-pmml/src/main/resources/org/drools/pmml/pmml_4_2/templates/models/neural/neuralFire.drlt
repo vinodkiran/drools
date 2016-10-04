@@ -1,6 +1,6 @@
 @comment{
 
-  Copyright 2011 JBoss Inc
+  Copyright 2011 Red Hat, Inc. and/or its affiliates.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -35,7 +35,8 @@ when
                   )
     accumulate( $c : @{ pmmlPackageName }.Charge( context == @{ ctx }, index == $neur.index, $in : value ),
                 $list : collectList( $c ),
-                $val : sumBD( $in );
+                // FIXME: DROOLS-1248
+                $val : sumBD( java.math.BigDecimal.valueOf( $in ) );
                 $list.size() == $neur.fanIn )
 then
     double x = $neur.getBias() + $val.doubleValue();

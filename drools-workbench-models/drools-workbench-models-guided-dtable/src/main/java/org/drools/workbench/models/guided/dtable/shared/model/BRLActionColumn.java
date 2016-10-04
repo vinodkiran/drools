@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.drools.workbench.models.datamodel.rule.IAction;
+
+import static java.lang.Math.*;
 
 /**
  * An Action column defined with a BRL fragment
@@ -60,11 +62,34 @@ public class BRLActionColumn extends ActionCol52
         // Field: childColumns.
         if ( !isEqualOrNull( this.getChildColumns(),
                              other.getChildColumns() ) ) {
-            result.add( new BaseColumnFieldDiffImpl( FIELD_CHILD_COLUMNS,
-                                                     this.getChildColumns(),
-                                                     other.getChildColumns() ) );
+            result.addAll( getColumnDiffs( other.getChildColumns() ) );
         }
 
+        return result;
+    }
+
+    private List<BaseColumnFieldDiff> getColumnDiffs( List<BRLActionVariableColumn> otherChildColumns ) {
+        int commonLength = min( this.childColumns.size(), otherChildColumns.size() );
+        List<BaseColumnFieldDiff> result = new ArrayList<>();
+        for ( int i = 0; i < commonLength; i++ ) {
+            result.addAll( this.childColumns.get( i ).diff( otherChildColumns.get( i ) ) );
+        }
+        result.addAll( getDiffsForUnpairedColumns( this.childColumns, commonLength, false ) );
+        result.addAll( getDiffsForUnpairedColumns( otherChildColumns, commonLength, true ) );
+        return result;
+    }
+
+    private List<BaseColumnFieldDiff> getDiffsForUnpairedColumns( List<BRLActionVariableColumn> addedChildColumns,
+                                                                  int commonLength,
+                                                                  boolean added ) {
+        List<BaseColumnFieldDiff> result = new ArrayList<>();
+        if ( addedChildColumns.size() > commonLength ) {
+            for ( BRLActionVariableColumn column : addedChildColumns.subList( commonLength, addedChildColumns.size() ) ) {
+                result.add( new BaseColumnFieldDiffImpl( FIELD_CHILD_COLUMNS,
+                                                         ( added ) ? null : column,
+                                                         ( added ) ? column : null ) );
+            }
+        }
         return result;
     }
 
@@ -82,14 +107,6 @@ public class BRLActionColumn extends ActionCol52
 
     public void setChildColumns( List<BRLActionVariableColumn> childColumns ) {
         this.childColumns = childColumns;
-    }
-
-    @Override
-    public void setHeader( String header ) {
-        super.setHeader( header );
-        for ( BRLActionVariableColumn variable : this.childColumns ) {
-            variable.setHeader( header );
-        }
     }
 
     @Override

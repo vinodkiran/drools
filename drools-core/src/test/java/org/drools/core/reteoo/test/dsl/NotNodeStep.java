@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package org.drools.core.reteoo.test.dsl;
 
-import java.beans.IntrospectionException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -88,25 +87,20 @@ public class NotNodeStep
 
             List<BetaNodeFieldConstraint> list = new ArrayList<BetaNodeFieldConstraint>();
             for ( int i = 1; i < args.size(); i++ ) {
-                a = args.get( i );
+                a = args.get(i);
                 String fieldName = a[0].trim();
                 String operator = a[1].trim();
                 String var = a[2].trim();
 
-                Declaration declr = (Declaration) context.get( var );
+                Declaration declr = (Declaration) context.get(var);
 
                 BetaNodeFieldConstraint betaConstraint;
-                try {
-                    betaConstraint = this.reteTesterHelper.getBoundVariableConstraint( cls,
-                                                                                         fieldName,
-                                                                                         declr,
-                                                                                         operator );
-                    list.add( betaConstraint );
-                } catch ( IntrospectionException e ) {
-                    throw new IllegalArgumentException();
-                }
+                betaConstraint = this.reteTesterHelper.getBoundVariableConstraint(cls,
+                        fieldName,
+                        declr,
+                        operator);
+                list.add(betaConstraint);
             }
-            
             BetaConstraints constraints;
             switch ( list.size() ) {
                 case 0:

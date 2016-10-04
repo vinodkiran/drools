@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -209,25 +209,6 @@ public class TypeDeclarationUtils {
     public static boolean isNovelClass( AbstractClassTypeDeclarationDescr typeDescr, PackageRegistry reg ) {
         return getExistingDeclarationClass( typeDescr, reg ) == null;
     }
-
-    /*
-    public static String lookupSimpleNameByImportStar( AbstractClassTypeDeclarationDescr typeDescr, TypeResolver resolver ) {
-        if ( isEmpty(typeDescr.getNamespace()) && typeDescr.getFields().isEmpty() ) {
-            // might be referencing a class imported with a package import (.*)
-
-            if (resolver != null) {
-                try {
-                    Class<?> clz = resolver.resolveType( typeDescr.getTypeName() );
-                    return clz.getName();
-                } catch (Exception e) {
-                    // intentionally eating the exception as we will fallback to default namespace
-                }
-            }
-        }
-        return null;
-    }
-    */
-
 
     public static String rewriteInitExprWithImports( String expr,
                                                      TypeResolver typeResolver ) {

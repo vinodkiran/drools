@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 JBoss Inc
+ * Copyright 2012 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -657,11 +657,18 @@ public class RuleModelDRLPersistenceImpl
             if ( pattern.getFactPattern() != null ) {
                 final LHSGeneratorContext gctx = generatorContextFactory.newChildGeneratorContext( rootContext,
                                                                                                    pattern.getFactPattern() );
+                // DROOLS-1308 - wraps from pattern in parenthesis
+                if ( !isSubPattern ) {
+                    buf.append( "(" );
+                }
                 generateFactPattern( pattern.getFactPattern(),
                                      gctx );
 
                 buf.append( " from " );
                 renderExpression( pattern.getExpression() );
+                if ( !isSubPattern ) {
+                    buf.append( ")" );
+                }
                 buf.append( "\n" );
             }
         }
@@ -2766,9 +2773,12 @@ public class RuleModelDRLPersistenceImpl
                 String type = getStatementType( fact,
                                                 factsType );
                 if ( type != null ) {
+                    boundParams.put( fact,
+                                     type );
                     ActionInsertLogicalFact action = new ActionInsertLogicalFact( type );
                     m.addRhsItem( action );
                     if ( factsType.containsKey( fact ) ) {
+                        action.setBoundName( fact );
                         addSettersToAction( setStatements,
                                             fact,
                                             action,
@@ -2784,6 +2794,8 @@ public class RuleModelDRLPersistenceImpl
                 String type = getStatementType( fact,
                                                 factsType );
                 if ( type != null ) {
+                    boundParams.put( fact,
+                                     type );
                     ActionInsertFact action = new ActionInsertFact( type );
                     m.addRhsItem( action );
                     if ( factsType.containsKey( fact ) ) {
@@ -3172,7 +3184,7 @@ public class RuleModelDRLPersistenceImpl
 
     private ActionFieldValue buildFieldValue( final boolean isJavaDialect,
                                               String field,
-                                              final String value,
+                                              String value,
                                               final String dataType,
                                               final Map<String, String> boundParams ) {
         if ( value.contains( "wiWorkItem.getResult" ) ) {
@@ -3205,6 +3217,8 @@ public class RuleModelDRLPersistenceImpl
             }
         }
 
+        value = removeNumericSuffix( value,
+                                     dataType );
         final int fieldNature = inferFieldNature( dataType,
                                                   value,
                                                   boundParams,
@@ -3217,6 +3231,9 @@ public class RuleModelDRLPersistenceImpl
                 break;
             case FieldNatureType.TYPE_VARIABLE:
                 paramValue = "=" + paramValue;
+                break;
+            case FieldNatureType.TYPE_TEMPLATE:
+                paramValue = unwrapTemplateKey( value );
                 break;
             default:
                 paramValue = adjustParam( dataType,
@@ -3291,7 +3308,7 @@ public class RuleModelDRLPersistenceImpl
                             final boolean isJavaDialect,
                             final Map<String, String> boundParams,
                             final PackageDataModelOracle dmo ) {
-        if (expr.startsWith( "eval(" ) ) {
+        if ( isSingleEval( expr ) ) {
             return new EvalExpr( unwrapParenthesis( expr ) );
         }
         List<String> splittedExpr = splitExpression( expr );
@@ -3302,7 +3319,7 @@ public class RuleModelDRLPersistenceImpl
                                   isJavaDialect,
                                   boundParams,
                                   dmo );
-            } else if ( singleExpr.startsWith( "eval(" ) ) {
+            } else if ( isSingleEval( singleExpr ) ) {
                 return new EvalExpr( unwrapParenthesis( singleExpr ) );
             } else {
                 return new SimpleExpr( singleExpr,
@@ -3319,6 +3336,28 @@ public class RuleModelDRLPersistenceImpl
                                                  dmo ) );
         }
         return complexExpr;
+    }
+
+    private boolean isSingleEval( final String expr ) {
+        if ( !expr.startsWith( "eval(" ) ) {
+            return false;
+        }
+        int nestingLevel = 0;
+        final char[] characters = expr.substring( 4 ).trim().toCharArray();
+        for ( int i = 0; i < characters.length; i++ ) {
+            final char ch = characters[ i ];
+            if ( ch == '(' ) {
+                nestingLevel++;
+            } else if ( ch == ')' ) {
+                nestingLevel--;
+                if ( nestingLevel == 0 ) {
+                    if ( i < characters.length - 1 ) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     private enum SplitterState {
@@ -3537,7 +3576,8 @@ public class RuleModelDRLPersistenceImpl
                                           fieldConstraint.getFieldName() );
 
             if ( field != null && ( fieldConstraint.getFieldType() == null || fieldConstraint.getFieldType().trim().length() == 0 ) ) {
-                fieldConstraint.setFieldType( field.getType() );
+                fieldConstraint.setFieldType( getSimpleFactType( field.getType(),
+                                                                 dmo ) );
             }
             return fieldConstraint;
         }
@@ -3863,7 +3903,7 @@ public class RuleModelDRLPersistenceImpl
                     for ( ModelField field : fields ) {
                         if ( field.getName().equals( fieldName ) ) {
                             boundParams.put( fieldBinding,
-                                             field.getType() );
+                                             field.getClassName() );
                         }
                     }
                 }
@@ -3920,11 +3960,16 @@ public class RuleModelDRLPersistenceImpl
                                              final BaseSingleFieldConstraint con,
                                              String value ) {
             String type = null;
-            if ( value.startsWith( "\"" ) ) {
+            if ( value.contains( "@{" ) ) {
+                con.setConstraintValueType( BaseSingleFieldConstraint.TYPE_TEMPLATE );
+                con.setValue( unwrapTemplateKey( value ) );
+
+            } else if ( value.startsWith( "\"" ) ) {
                 type = DataType.TYPE_STRING;
                 con.setConstraintValueType( SingleFieldConstraint.TYPE_LITERAL );
                 con.setValue( value.substring( 1,
                                                value.length() - 1 ) );
+
             } else if ( value.startsWith( "(" ) ) {
                 if ( operator != null && operator.contains( "in" ) ) {
                     value = unwrapParenthesis( value );
@@ -3935,6 +3980,7 @@ public class RuleModelDRLPersistenceImpl
                     con.setConstraintValueType( SingleFieldConstraint.TYPE_RET_VALUE );
                     con.setValue( unwrapParenthesis( value ) );
                 }
+
             } else {
                 if ( !Character.isDigit( value.charAt( 0 ) ) ) {
                     if ( value.equals( "true" ) || value.equals( "false" ) ) {

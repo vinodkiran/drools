@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 JBoss Inc
+ * Copyright 2011 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,9 @@ import java.io.ObjectOutput;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.StringTokenizer;
 
 public class AnnotationDefinition implements Externalizable, Annotation {
 
@@ -78,6 +76,11 @@ public class AnnotationDefinition implements Externalizable, Annotation {
         int result = name != null ? name.hashCode() : 0;
         result = 31 * result + (values != null ? values.hashCode() : 0);
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return "@" + name;
     }
 
     public String getName() {

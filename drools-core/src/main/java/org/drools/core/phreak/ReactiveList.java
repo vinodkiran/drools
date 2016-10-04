@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 
-public class ReactiveList<T> extends ReactiveObject implements List<T> {
+import org.drools.core.phreak.ReactiveObjectUtil.ModificationType;
+import org.drools.core.spi.Tuple;
+
+public class ReactiveList<T> extends AbstractReactiveObject implements List<T> {
 
     private final List<T> list;
 
@@ -36,7 +39,12 @@ public class ReactiveList<T> extends ReactiveObject implements List<T> {
     @Override
     public boolean add(T t) {
         boolean result = list.add(t);
-        notifyModification(t);
+        ReactiveObjectUtil.notifyModification(t, getLeftTuples(), ModificationType.ADD);
+        if (t instanceof ReactiveObject) {
+            for (Tuple lts : getLeftTuples()) {
+                ((ReactiveObject) t).addLeftTuple(lts);
+            }
+        }
         return result;
     }
 
@@ -72,7 +80,16 @@ public class ReactiveList<T> extends ReactiveObject implements List<T> {
 
     @Override
     public boolean remove(Object o) {
-        return list.remove(o);
+        boolean result = list.remove(o);
+        if (result) {
+            if (o instanceof ReactiveObject) {
+                for (Tuple lts : getLeftTuples()) {
+                    ((ReactiveObject) o).removeLeftTuple(lts);
+                }
+            }
+            ReactiveObjectUtil.notifyModification(o, getLeftTuples(), ModificationType.REMOVE);
+        }
+        return result;
     }
 
     @Override

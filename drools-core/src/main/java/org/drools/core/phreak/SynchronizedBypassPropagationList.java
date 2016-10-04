@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 JBoss Inc
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,11 @@ package org.drools.core.phreak;
 
 import org.drools.core.common.InternalWorkingMemory;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 public class SynchronizedBypassPropagationList extends SynchronizedPropagationList {
+
+    private AtomicBoolean executing = new AtomicBoolean( false );
 
     public SynchronizedBypassPropagationList(InternalWorkingMemory workingMemory) {
         super(workingMemory);
@@ -28,15 +32,39 @@ public class SynchronizedBypassPropagationList extends SynchronizedPropagationLi
         workingMemory.getAgenda().executeTask( new ExecutableEntry() {
            @Override
            public void execute() {
-               propagationEntry.execute(workingMemory);
+               if (executing.compareAndSet( false, true )) {
+                   try {
+                       propagationEntry.execute( workingMemory );
+                   } finally {
+                       executing.set( false );
+                       flush();
+                   }
+               } else {
+                   doAdd();
+               }
            }
 
            @Override
            public void enqueue() {
-               internalAddEntry( propagationEntry );
+               doAdd();
+           }
+
+            private void doAdd() {
+                internalAddEntry( propagationEntry );
            }
         });
-        notifyHalt();
+        notifyWaitOnRest();
+    }
+
+    @Override
+    public void flush() {
+        if (!executing.get()) {
+            PropagationEntry head = takeAll();
+            while (head != null) {
+                flush( workingMemory, head );
+                head = takeAll();
+            }
+        }
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 JBoss Inc
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,10 @@ public class XStreamHelper {
                        ModifyCommand.class );
         xstream.alias( "setters",
                        SetterImpl.class );
+        // TODO retract is deprecated and should be removed
         xstream.alias( "retract",
+                       DeleteCommand.class );
+        xstream.alias( "delete",
                        DeleteCommand.class );
         xstream.alias( "insert-elements",
                        InsertElementsCommand.class );
@@ -61,10 +64,14 @@ public class XStreamHelper {
                        GetObjectCommand.class );
         xstream.alias( "get-objects",
                        GetObjectsCommand.class );
+        xstream.alias( "get-fact-handles",
+                       GetFactHandlesCommand.class );
         xstream.alias( "execution-results",
                        ExecutionResultImpl.class );
         xstream.alias( "fire-all-rules",
                        FireAllRulesCommand.class );
+        xstream.alias( "fire-until-halt",
+                       FireUntilHaltCommand.class );
         xstream.alias( "query",
                        QueryCommand.class );
         xstream.alias( "query-results",
